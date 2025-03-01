@@ -1,0 +1,7 @@
+[package]
+name = "ferrischess"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+chessframe = { git = "https://github.com/Zirconium419122/chessframe.git" }
