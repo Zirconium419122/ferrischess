@@ -1,6 +1,8 @@
 use std::{io, str::FromStr};
 
-use chessframe::{bitboard::EMPTY, board::Board, uci::*};
+use chessframe::{board::Board, uci::*};
+
+use crate::{eval::Eval, search::Search};
 
 pub struct Engine {
     board: Board,
@@ -78,21 +80,38 @@ impl Uci for Engine {
                         }
                     }
                 }
-                UciCommand::Go { .. } => {
-                    let moves = self
-                        .board
-                        .generate_moves_vec(!EMPTY)
-                        .into_iter()
-                        .filter(|mv| self.board.make_move_new(mv).is_ok())
-                        .collect::<Vec<_>>();
+                UciCommand::Go(Go { depth, .. }) => {
+                    let search = Search::new(&self.board, depth.unwrap_or(6));
+                    let (score, best_move) = search.start_search();
 
-                    if let Some(mv) = moves.last() {
-                        self.send_command(UciCommand::Info(Info {
-                            pv: Some(mv.to_string()),
-                            ..Default::default()
-                        }));
+                    if let Some(best_move) = best_move {
+                        if score.abs() >= Eval::MATE_SCORE - 100 {
+                            let correction = if score > 0 { 1 } else { -1 };
+                            let moves_to_mate = Eval::MATE_SCORE - score.abs();
+                            let mate_in_moves = (moves_to_mate / 2) + 1;
+
+                            let mut score = Score::default();
+                            score.mate = Some(correction as isize * mate_in_moves as isize);
+
+                            self.send_command(UciCommand::Info(Info {
+                                pv: Some(best_move.to_string()),
+                                score: Some(score),
+                                ..Default::default()
+                            }));
+                        } else {
+                            let cp = score;
+
+                            let mut score = Score::default();
+                            score.cp = Some(cp as isize);
+
+                            self.send_command(UciCommand::Info(Info {
+                                pv: Some(best_move.to_string()),
+                                score: Some(score),
+                                ..Default::default()
+                            }));
+                        }
                         self.send_command(UciCommand::BestMove {
-                            best_move: mv.to_string(),
+                            best_move: best_move.to_string(),
                             ponder: None,
                         });
                     }
