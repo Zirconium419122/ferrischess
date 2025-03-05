@@ -2,11 +2,17 @@ use chessframe::{bitboard::EMPTY, board::Board, chess_move::ChessMove};
 
 use crate::eval::Eval;
 
-pub struct Search<'a>(&'a Board, usize);
+pub struct Search<'a> { 
+    board: &'a Board, 
+    search_depth: usize,
+}
 
 impl<'a> Search<'a> {
     pub fn new(board: &Board, depth: usize) -> Search {
-        Search(board, depth)
+        Search {
+            board,
+            search_depth: depth,
+        }
     }
 
     pub fn start_search(&self) -> (i32, Option<ChessMove>) {
@@ -20,13 +26,12 @@ impl<'a> Search<'a> {
         let alpha = i32::MIN;
         let beta = i32::MAX;
 
-
-        let mut moves = self.0.generate_moves_vec(!EMPTY);
-        Self::sort_moves(&self.0, &mut moves);
+        let mut moves = self.board.generate_moves_vec(!EMPTY);
+        Self::sort_moves(&self.board, &mut moves);
         for mv in moves {
-            if let Ok(board) = self.0.make_move_new(&mv) {
-                let score = -self.search(&board, alpha, beta, self.1 - 1);
-                
+            if let Ok(board) = self.board.make_move_new(&mv) {
+                let score = -self.search(&board, alpha, beta, self.search_depth - 1);
+
                 if score > max {
                     max = score;
                     best_move = Some(mv);
@@ -66,7 +71,7 @@ impl<'a> Search<'a> {
 
         if !legal_moves {
             if board.in_check() {
-                return -Eval::MATE_SCORE + self.1 as i32 - depth as i32;
+                return -Eval::MATE_SCORE + self.search_depth as i32 - depth as i32;
             } else {
                 return 0;
             }

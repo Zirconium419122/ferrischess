@@ -25,6 +25,8 @@ impl<'a> Eval<'a> {
                 * Self::piece_value(piece);
         }
 
+        score -= 10 * self.0.in_check() as i32;
+
         let perspective = if self.0.side_to_move == Color::White {
             1
         } else {
