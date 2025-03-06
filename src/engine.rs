@@ -90,8 +90,10 @@ impl Uci for Engine {
                             let moves_to_mate = Eval::MATE_SCORE - score.abs();
                             let mate_in_moves = (moves_to_mate / 2) + 1;
 
-                            let mut score = Score::default();
-                            score.mate = Some(correction as isize * mate_in_moves as isize);
+                            let score = Score {
+                                mate: Some(correction as isize * mate_in_moves as isize),
+                                ..Default::default()
+                            };
 
                             self.send_command(UciCommand::Info(Info {
                                 pv: Some(best_move.to_string()),
@@ -101,8 +103,10 @@ impl Uci for Engine {
                         } else {
                             let cp = score;
 
-                            let mut score = Score::default();
-                            score.cp = Some(cp as isize);
+                            let score = Score {
+                                cp: Some(cp as isize),
+                                ..Default::default()
+                            };
 
                             self.send_command(UciCommand::Info(Info {
                                 pv: Some(best_move.to_string()),

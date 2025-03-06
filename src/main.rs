@@ -1,8 +1,8 @@
 use engine::Engine;
 
 mod engine;
-mod search;
 mod eval;
+mod search;
 
 fn main() {
     let mut engine = Engine::new();

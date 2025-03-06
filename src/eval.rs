@@ -1,6 +1,10 @@
-use chessframe::{board::Board, color::Color, piece::{Piece, PIECES}};
+use chessframe::{
+    board::Board,
+    color::Color,
+    piece::{Piece, PIECES},
+};
 
-pub const PIECE_VALUES: [i32; 6] = [100, 300, 325, 500, 900, 0];
+pub const PIECE_VALUES: [i32; 6] = [100, 310, 325, 500, 900, 0];
 
 pub struct Eval<'a>(&'a Board);
 
@@ -25,7 +29,9 @@ impl<'a> Eval<'a> {
                 * Self::piece_value(piece);
         }
 
-        score -= 10 * self.0.in_check() as i32;
+        if self.0.in_check() {
+            score -= 50;
+        }
 
         let perspective = if self.0.side_to_move == Color::White {
             1

@@ -1,13 +1,22 @@
-use chessframe::{bitboard::EMPTY, board::Board, chess_move::ChessMove};
+use chessframe::{bitboard::EMPTY, board::Board, chess_move::ChessMove, piece::Piece};
 
 use crate::eval::Eval;
 
-pub struct Search<'a> { 
-    board: &'a Board, 
+pub struct Search<'a> {
+    board: &'a Board,
     search_depth: usize,
 }
 
 impl<'a> Search<'a> {
+    const MVV_LVA: [[i8; 6]; 6] = [
+        [15, 14, 13, 12, 11, 10], // victim Pawn, attacker P, N, B, R, Q, K
+        [25, 24, 23, 22, 21, 20], // victim Knight, attacker P, N, B, R, Q, K
+        [35, 34, 33, 32, 31, 30], // victim Bishop, attacker P, N, B, R, Q, K
+        [45, 44, 43, 42, 41, 40], // victim Rook, attacker P, N, B, R, Q, K
+        [55, 54, 53, 52, 51, 50], // victim Queen, attacker P, N, B, R, Q, K
+        [0, 0, 0, 0, 0, 0],       // victim King, attacker P, N, B, R, Q, K
+    ];
+
     pub fn new(board: &Board, depth: usize) -> Search {
         Search {
             board,
@@ -23,11 +32,11 @@ impl<'a> Search<'a> {
         let mut max = i32::MIN;
         let mut best_move = None;
 
-        let alpha = i32::MIN;
-        let beta = i32::MAX;
+        let alpha = -1_000_000_000;
+        let beta = 1_000_000_000;
 
         let mut moves = self.board.generate_moves_vec(!EMPTY);
-        Self::sort_moves(&self.board, &mut moves);
+        Self::sort_moves(self.board, &mut moves);
         for mv in moves {
             if let Ok(board) = self.board.make_move_new(&mv) {
                 let score = -self.search(&board, alpha, beta, self.search_depth - 1);
@@ -38,18 +47,18 @@ impl<'a> Search<'a> {
                 }
             }
         }
-        
+
         (max, best_move)
     }
-    
+
     fn search(&self, board: &Board, mut alpha: i32, beta: i32, depth: usize) -> i32 {
         if depth == 0 {
             return Eval::new(board).eval();
         }
-        
+
         let mut legal_moves = false;
         let mut max = i32::MIN;
-        
+
         let mut moves = board.generate_moves_vec(!EMPTY);
         Self::sort_moves(board, &mut moves);
         for mv in moves {
@@ -64,7 +73,7 @@ impl<'a> Search<'a> {
                     }
                 }
                 if score >= beta {
-                    return max;
+                    return score;
                 }
             }
         }
@@ -80,31 +89,25 @@ impl<'a> Search<'a> {
         max
     }
 
-    fn sort_moves(board: &Board, moves: &mut Vec<ChessMove>) {
+    fn sort_moves(board: &Board, moves: &mut [ChessMove]) {
         moves.sort_by_key(|mv| -Self::score_move(board, mv));
     }
 
     fn score_move(board: &Board, mv: &ChessMove) -> i32 {
-        /// MVV_LVA[victim][attacker]
-        const MVV_LVA: [[i8; 6]; 6] = [
-            [15, 14, 13, 12, 11, 10], // victim Pawn, attacker P, N, B, R, Q, K
-            [25, 24, 23, 22, 21, 20], // victim Knight, attacker P, N, B, R, Q, K
-            [35, 34, 33, 32, 31, 30], // victim Bishop, attacker P, N, B, R, Q, K
-            [45, 44, 43, 42, 41, 40], // victim Rook, attacker P, N, B, R, Q, K
-            [55, 54, 53, 52, 51, 50], // victim Queen, attacker P, N, B, R, Q, K
-            [0, 0, 0, 0, 0, 0],       // victim King, attacker P, N, B, R, Q, K
-        ];
-
         let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
 
         if let Some(captured) = board.get_piece(mv.to) {
-            return unsafe {
-                *MVV_LVA
-                    .get_unchecked(captured.to_index())
-                    .get_unchecked(moved.to_index())
-            } as i32;
+            return Self::get_mvv_lva(captured, moved) as i32;
         }
 
         0
+    }
+
+    fn get_mvv_lva(victim: Piece, attacker: Piece) -> i8 {
+        unsafe {
+            *Self::MVV_LVA
+                .get_unchecked(victim.to_index())
+                .get_unchecked(attacker.to_index())
+        }
     }
 }
