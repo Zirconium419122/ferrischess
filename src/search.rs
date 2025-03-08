@@ -53,7 +53,7 @@ impl<'a> Search<'a> {
 
     fn search(&self, board: &Board, mut alpha: i32, beta: i32, depth: usize) -> i32 {
         if depth == 0 {
-            return Eval::new(board).eval();
+            return Self::search_captures(board, alpha, beta);
         }
 
         let mut legal_moves = false;
@@ -87,6 +87,33 @@ impl<'a> Search<'a> {
         }
 
         max
+    }
+
+    fn search_captures(board: &Board, mut alpha: i32, beta: i32) -> i32 {
+        let eval = Eval::new(board).eval();
+        if eval >= beta {
+            return eval;
+        }
+        if eval > alpha {
+            alpha = eval;
+        }
+
+        let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
+        Self::sort_moves(board, &mut moves);
+        for mv in moves {
+            if let Ok(board) = board.make_move_new(&mv) {
+                let score = -Self::search_captures(&board, -beta, -alpha);
+
+                if score >= beta {
+                    return score;
+                }
+                if score > alpha {
+                    alpha = score;
+                }
+            }
+        }
+
+        alpha
     }
 
     fn sort_moves(board: &Board, moves: &mut [ChessMove]) {
