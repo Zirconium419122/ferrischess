@@ -1,4 +1,4 @@
-name: Release FerrisChess
+name: Release ferrischess
 
 on:
   push:
@@ -6,14 +6,9 @@ on:
       - 'v*'  # Runs only when a tag starting with 'v' is pushed
 
 jobs:
-  build-linux-windows:
-    name: Build for Linux & Windows
+  build-linux:
+    name: Build for Linux
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target: 
-          - x86_64-unknown-linux-gnu
-          - x86_64-pc-windows-msvc
 
     steps:
       - name: Checkout repository
@@ -22,24 +17,47 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: x86_64-unknown-linux-gnu
 
-      - name: Build for ${{ matrix.target }}
-        run: cargo build --release --target=${{ matrix.target }}
+      - name: Build for Linux
+        run: cargo build --release --target=x86_64-unknown-linux-gnu
 
       - name: Prepare artifact
         run: |
           mkdir -p artifacts
-          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            mv target/${{ matrix.target }}/release/ferrischess.exe artifacts/ferrischess-${{ matrix.target }}.exe
-          else
-            mv target/${{ matrix.target }}/release/ferrischess artifacts/ferrischess-${{ matrix.target }}
-          fi
+          mv target/x86_64-unknown-linux-gnu/release/ferrischess artifacts/ferrischess-x86_64-unknown-linux-gnu
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ferrischess-${{ matrix.target }}
+          name: ferrischess-x86_64-unknown-linux-gnu
+          path: artifacts/*
+
+  build-windows:
+    name: Build for Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build for Windows
+        run: cargo build --release --target=x86_64-pc-windows-msvc
+
+      - name: Prepare artifact
+        run: |
+          mkdir artifacts
+          move target\x86_64-pc-windows-msvc\release\ferrischess.exe artifacts\ferrischess-x86_64-pc-windows-msvc.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferrischess-x86_64-pc-windows-msvc
           path: artifacts/*
 
   build-macos:
@@ -71,7 +89,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build-linux-windows, build-macos]
+    needs: [build-linux, build-windows, build-macos]
     runs-on: ubuntu-latest
 
     steps:
