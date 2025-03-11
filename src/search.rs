@@ -89,9 +89,11 @@ impl<'a> Search<'a> {
         max
     }
 
-    fn search_captures(board: &Board, mut alpha: i32, beta: i32) -> i32 {
+    fn search_captures(&mut self, board: &Board, mut alpha: i32, beta: i32) -> i32 {
+        const EVAL_MARGIN: i32 = 25;
+
         let eval = Eval::new(board).eval();
-        if eval >= beta {
+        if eval + EVAL_MARGIN >= beta {
             return eval;
         }
         if eval > alpha {

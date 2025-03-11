@@ -1,8 +1,6 @@
-use chessframe::{
-    board::Board,
-    color::Color,
-    piece::{Piece, PIECES},
-};
+use chessframe::{board::Board, color::Color, piece::Piece};
+
+use crate::piecesquaretable::PieceSquareTable;
 
 pub const PIECE_VALUES: [i32; 6] = [100, 310, 325, 500, 900, 0];
 
@@ -24,11 +22,16 @@ impl<'a> Eval<'a> {
     pub fn eval(&self) -> i32 {
         let mut score = 0;
 
-        for piece in PIECES.iter() {
-            score += self.board.pieces_color(*piece, Color::White).count_ones() as i32
-                * Self::piece_value(piece);
-            score -= self.board.pieces_color(*piece, Color::Black).count_ones() as i32
-                * Self::piece_value(piece);
+        for square in self.board.occupancy(Color::White) {
+            let piece = unsafe { self.board.get_piece(square).unwrap_unchecked() };
+            score += Self::piece_value(&piece)
+                + PieceSquareTable::read(square, piece, Color::White) as i32;
+        }
+
+        for square in self.board.occupancy(Color::Black) {
+            let piece = unsafe { self.board.get_piece(square).unwrap_unchecked() };
+            score -= Self::piece_value(&piece)
+                + PieceSquareTable::read(square, piece, Color::Black) as i32;
         }
 
         if self.board.in_check() {

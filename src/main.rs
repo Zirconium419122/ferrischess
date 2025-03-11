@@ -2,6 +2,7 @@ use engine::Engine;
 
 mod engine;
 mod eval;
+mod piecesquaretable;
 mod search;
 
 fn main() {
