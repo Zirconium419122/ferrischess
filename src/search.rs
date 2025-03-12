@@ -1,10 +1,17 @@
-use chessframe::{bitboard::EMPTY, board::Board, chess_move::ChessMove, piece::Piece};
+use chessframe::{
+    bitboard::{BitBoard, EMPTY},
+    board::Board,
+    chess_move::ChessMove,
+    color::Color,
+    piece::Piece,
+};
 
 use crate::eval::Eval;
 
 pub struct Search<'a> {
     board: &'a Board,
     search_depth: usize,
+    pub nodes: usize,
 }
 
 impl<'a> Search<'a> {
@@ -21,14 +28,15 @@ impl<'a> Search<'a> {
         Search {
             board,
             search_depth: depth,
+            nodes: 0,
         }
     }
 
-    pub fn start_search(&self) -> (i32, Option<ChessMove>) {
+    pub fn start_search(&mut self) -> (i32, Option<ChessMove>) {
         self.search_base()
     }
 
-    fn search_base(&self) -> (i32, Option<ChessMove>) {
+    fn search_base(&mut self) -> (i32, Option<ChessMove>) {
         let mut max = i32::MIN;
         let mut best_move = None;
 
@@ -41,6 +49,8 @@ impl<'a> Search<'a> {
             if let Ok(board) = self.board.make_move_new(&mv) {
                 let score = -self.search(&board, alpha, beta, self.search_depth - 1);
 
+                self.nodes += 1;
+
                 if score > max {
                     max = score;
                     best_move = Some(mv);
@@ -51,9 +61,9 @@ impl<'a> Search<'a> {
         (max, best_move)
     }
 
-    fn search(&self, board: &Board, mut alpha: i32, beta: i32, depth: usize) -> i32 {
+    fn search(&mut self, board: &Board, mut alpha: i32, beta: i32, depth: usize) -> i32 {
         if depth == 0 {
-            return Self::search_captures(board, alpha, beta);
+            return self.search_captures(board, alpha, beta);
         }
 
         let mut legal_moves = false;
@@ -65,6 +75,8 @@ impl<'a> Search<'a> {
             if let Ok(board) = board.make_move_new(&mv) {
                 legal_moves = true;
                 let score = -self.search(&board, -beta, -alpha, depth - 1);
+
+                self.nodes += 1;
 
                 if score > max {
                     max = score;
@@ -104,7 +116,9 @@ impl<'a> Search<'a> {
         Self::sort_moves(board, &mut moves);
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
-                let score = -Self::search_captures(&board, -beta, -alpha);
+                let score = -self.search_captures(&board, -beta, -alpha);
+
+                self.nodes += 1;
 
                 if score >= beta {
                     return score;
@@ -125,11 +139,20 @@ impl<'a> Search<'a> {
     fn score_move(board: &Board, mv: &ChessMove) -> i32 {
         let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
 
-        if let Some(captured) = board.get_piece(mv.to) {
-            return Self::get_mvv_lva(captured, moved) as i32;
+        let mut score = 0;
+
+        if Self::pawn_attack_mask(board, !board.side_to_move)
+            & BitBoard::from_square(mv.to)
+            != EMPTY
+        {
+            score -= 40;
         }
 
-        0
+        if let Some(captured) = board.get_piece(mv.to) {
+            score += Self::get_mvv_lva(captured, moved) as i32;
+        }
+
+        score
     }
 
     fn get_mvv_lva(victim: Piece, attacker: Piece) -> i8 {
@@ -137,6 +160,21 @@ impl<'a> Search<'a> {
             *Self::MVV_LVA
                 .get_unchecked(victim.to_index())
                 .get_unchecked(attacker.to_index())
+        }
+    }
+
+    fn pawn_attack_mask(board: &Board, color: Color) -> BitBoard {
+        match color {
+            Color::White => {
+                ((board.pieces_color(Piece::Pawn, color) << 7) & !BitBoard(0x8080808080808080))
+                    | ((board.pieces_color(Piece::Pawn, color) << 9)
+                        & !BitBoard(0x1010101010101010))
+            }
+            Color::Black => {
+                ((board.pieces_color(Piece::Pawn, color) >> 7) & !BitBoard(0x1010101010101010))
+                    | ((board.pieces_color(Piece::Pawn, color) >> 9)
+                        & !BitBoard(0x8080808080808080))
+            }
         }
     }
 }
