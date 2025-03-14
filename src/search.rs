@@ -39,6 +39,7 @@ impl<'a> Search<'a> {
     fn search_base(&mut self) -> (i32, Option<ChessMove>) {
         let mut max = i32::MIN;
         let mut best_move = None;
+        let mut legal_moves = false;
 
         let alpha = -1_000_000_000;
         let beta = 1_000_000_000;
@@ -47,6 +48,7 @@ impl<'a> Search<'a> {
         Self::sort_moves(self.board, &mut moves);
         for mv in moves {
             if let Ok(board) = self.board.make_move_new(&mv) {
+                legal_moves = true;
                 let score = -self.search(&board, alpha, beta, self.search_depth - 1);
 
                 self.nodes += 1;
@@ -55,6 +57,14 @@ impl<'a> Search<'a> {
                     max = score;
                     best_move = Some(mv);
                 }
+            }
+        }
+
+        if !legal_moves {
+            if self.board.in_check() {
+                return (-Eval::MATE_SCORE, None);
+            } else {
+                return (0, None);
             }
         }
 

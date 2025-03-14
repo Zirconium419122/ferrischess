@@ -81,7 +81,7 @@ impl Uci for Engine {
                     }
                 }
                 UciCommand::Go(Go { depth, .. }) => {
-                    let mut search = Search::new(&self.board, depth.unwrap_or(7));
+                    let mut search = Search::new(&self.board, depth.unwrap_or(6));
                     let (score, best_move) = search.start_search();
 
                     if let Some(best_move) = best_move {
