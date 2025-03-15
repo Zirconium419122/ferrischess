@@ -72,7 +72,7 @@ impl<'a> Search<'a> {
     }
 
     fn search(&mut self, board: &Board, mut alpha: i32, beta: i32, depth: usize) -> i32 {
-        if depth == 0 {
+        if depth == 0 && !board.in_check() {
             return self.search_captures(board, alpha, beta);
         }
 
@@ -84,7 +84,7 @@ impl<'a> Search<'a> {
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
                 legal_moves = true;
-                let score = -self.search(&board, -beta, -alpha, depth - 1);
+                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1));
 
                 self.nodes += 1;
 
@@ -151,8 +151,7 @@ impl<'a> Search<'a> {
 
         let mut score = 0;
 
-        if Self::pawn_attack_mask(board, !board.side_to_move)
-            & BitBoard::from_square(mv.to)
+        if Self::pawn_attack_mask(board, !board.side_to_move) & BitBoard::from_square(mv.to)
             != EMPTY
         {
             score -= 40;
