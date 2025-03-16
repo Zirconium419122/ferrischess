@@ -143,15 +143,16 @@ impl<'a> Search<'a> {
     }
 
     fn sort_moves(board: &Board, moves: &mut [ChessMove]) {
-        moves.sort_by_key(|mv| -Self::score_move(board, mv));
+        let pawn_attack_mask = Self::pawn_attack_mask(board, !board.side_to_move);
+        moves.sort_by_key(|mv| -Self::score_move(board, pawn_attack_mask, mv));
     }
 
-    fn score_move(board: &Board, mv: &ChessMove) -> i32 {
+    fn score_move(board: &Board, pawn_attack_mask: BitBoard, mv: &ChessMove) -> i32 {
         let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
 
         let mut score = 0;
 
-        if Self::pawn_attack_mask(board, !board.side_to_move) & BitBoard::from_square(mv.to)
+        if pawn_attack_mask & BitBoard::from_square(mv.to)
             != EMPTY
         {
             score -= 40;
