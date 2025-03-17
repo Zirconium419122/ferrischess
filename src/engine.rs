@@ -7,6 +7,7 @@ use crate::{eval::Eval, search::Search};
 pub struct Engine {
     board: Board,
     quitting: bool,
+    repetition_table: Vec<u64>,
 }
 
 impl Uci for Engine {
@@ -74,6 +75,9 @@ impl Uci for Engine {
                         let board = &mut self.board;
 
                         for mv in moves {
+                            let zobrist_hash = board.hash();
+                            self.repetition_table.push(zobrist_hash);
+
                             let mv = board.infer_move(&mv).unwrap();
 
                             let _ = board.make_move(&mv);
@@ -81,7 +85,11 @@ impl Uci for Engine {
                     }
                 }
                 UciCommand::Go(Go { depth, .. }) => {
-                    let mut search = Search::new(&self.board, depth.unwrap_or(6));
+                    let mut search = Search::new(
+                        &self.board,
+                        depth.unwrap_or(6),
+                        self.repetition_table.clone(),
+                    );
                     let (score, best_move) = search.start_search();
 
                     if let Some(best_move) = best_move {
@@ -135,6 +143,7 @@ impl Engine {
         Engine {
             board: Board::default(),
             quitting: false,
+            repetition_table: Vec::new(),
         }
     }
 

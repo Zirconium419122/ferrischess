@@ -11,6 +11,7 @@ use crate::eval::Eval;
 pub struct Search<'a> {
     board: &'a Board,
     search_depth: usize,
+    repetition_table: Vec<u64>,
     pub nodes: usize,
 }
 
@@ -24,10 +25,11 @@ impl<'a> Search<'a> {
         [0, 0, 0, 0, 0, 0],       // victim King, attacker P, N, B, R, Q, K
     ];
 
-    pub fn new(board: &Board, depth: usize) -> Search {
+    pub fn new(board: &Board, depth: usize, repetition_table: Vec<u64>) -> Search {
         Search {
             board,
             search_depth: depth,
+            repetition_table,
             nodes: 0,
         }
     }
@@ -40,6 +42,9 @@ impl<'a> Search<'a> {
         let mut max = i32::MIN;
         let mut best_move = None;
         let mut legal_moves = false;
+
+        let zobrist_hash = self.board.hash();
+        self.repetition_table.push(zobrist_hash);
 
         let alpha = -1_000_000_000;
         let beta = 1_000_000_000;
@@ -61,6 +66,8 @@ impl<'a> Search<'a> {
         }
 
         if !legal_moves {
+            let _ = self.repetition_table.pop();
+
             if self.board.in_check() {
                 return (-Eval::MATE_SCORE, None);
             } else {
@@ -68,12 +75,26 @@ impl<'a> Search<'a> {
             }
         }
 
+        let _ = self.repetition_table.pop();
+
         (max, best_move)
     }
 
     fn search(&mut self, board: &Board, mut alpha: i32, beta: i32, depth: usize) -> i32 {
         if depth == 0 && !board.in_check() {
+            let zobrist_hash = board.hash();
+            if self.repetition_table.iter().any(|&x| x == zobrist_hash) {
+                return 0;
+            }
+
             return self.search_captures(board, alpha, beta);
+        }
+
+        let zobrist_hash = board.hash();
+        if self.repetition_table.iter().any(|&x| x == zobrist_hash) {
+            return 0;
+        } else {
+            self.repetition_table.push(zobrist_hash);
         }
 
         let mut legal_moves = false;
@@ -99,6 +120,8 @@ impl<'a> Search<'a> {
                 }
             }
         }
+
+        let _ = self.repetition_table.pop();
 
         if !legal_moves {
             if board.in_check() {
@@ -152,9 +175,7 @@ impl<'a> Search<'a> {
 
         let mut score = 0;
 
-        if pawn_attack_mask & BitBoard::from_square(mv.to)
-            != EMPTY
-        {
+        if pawn_attack_mask & BitBoard::from_square(mv.to) != EMPTY {
             score -= 40;
         }
 
