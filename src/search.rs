@@ -65,17 +65,15 @@ impl<'a> Search<'a> {
             }
         }
 
-        if !legal_moves {
-            let _ = self.repetition_table.pop();
+        let _ = self.repetition_table.pop();
 
+        if !legal_moves {
             if self.board.in_check() {
                 return (-Eval::MATE_SCORE, None);
             } else {
                 return (0, None);
             }
         }
-
-        let _ = self.repetition_table.pop();
 
         (max, best_move)
     }
