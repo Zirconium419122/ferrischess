@@ -1,4 +1,4 @@
-use std::{io, str::FromStr};
+use std::{collections::HashSet, io, str::FromStr};
 
 use chessframe::{board::Board, uci::*};
 
@@ -85,10 +85,14 @@ impl Uci for Engine {
                     }
                 }
                 UciCommand::Go(Go { depth, .. }) => {
+                    let mut repetition_table =
+                        HashSet::from_iter(self.repetition_table.clone().into_iter());
+                    repetition_table.reserve(16);
+
                     let mut search = Search::new(
                         &self.board,
                         depth.unwrap_or(6),
-                        self.repetition_table.clone(),
+                        repetition_table,
                     );
                     let (score, best_move) = search.start_search();
 

@@ -1,9 +1,12 @@
+use std::collections::HashSet;
+
 use chessframe::{
     bitboard::{BitBoard, EMPTY},
     board::Board,
     chess_move::ChessMove,
     color::Color,
     piece::Piece,
+    transpositiontable::TranspositionTable,
 };
 
 use crate::eval::Eval;
@@ -11,11 +14,14 @@ use crate::eval::Eval;
 pub struct Search<'a> {
     board: &'a Board,
     search_depth: usize,
-    repetition_table: Vec<u64>,
+    transposition_table: TranspositionTable<ChessMove>,
+    repetition_table: HashSet<u64>,
     pub nodes: usize,
 }
 
 impl<'a> Search<'a> {
+    const TRANSPOSITIONTABLE_SIZE: usize = 64;
+
     const MVV_LVA: [[i8; 6]; 6] = [
         [15, 14, 13, 12, 11, 10], // victim Pawn, attacker P, N, B, R, Q, K
         [25, 24, 23, 22, 21, 20], // victim Knight, attacker P, N, B, R, Q, K
@@ -25,32 +31,50 @@ impl<'a> Search<'a> {
         [0, 0, 0, 0, 0, 0],       // victim King, attacker P, N, B, R, Q, K
     ];
 
-    pub fn new(board: &Board, depth: usize, repetition_table: Vec<u64>) -> Search {
+    pub fn new(board: &Board, depth: usize, repetition_table: HashSet<u64>) -> Search {
         Search {
             board,
             search_depth: depth,
             repetition_table,
+            transposition_table: TranspositionTable::with_size_mb(Search::TRANSPOSITIONTABLE_SIZE),
             nodes: 0,
         }
     }
 
     pub fn start_search(&mut self) -> (i32, Option<ChessMove>) {
-        self.search_base()
+        let search_depth = self.search_depth;
+        let mut result = None;
+
+        for i in 1..=search_depth {
+            self.search_depth = i;
+            result = Some(self.search_base());
+        }
+
+        result.unwrap()
     }
 
-    fn search_base(&mut self) -> (i32, Option<ChessMove>) {
+    pub fn search_base(&mut self) -> (i32, Option<ChessMove>) {
+        let mut legal_moves = false;
         let mut max = i32::MIN;
         let mut best_move = None;
-        let mut legal_moves = false;
 
+        let mut inserted = false;
         let zobrist_hash = self.board.hash();
-        self.repetition_table.push(zobrist_hash);
+        if !self.repetition_table.contains(&zobrist_hash) {
+            inserted = true;
+            self.repetition_table.insert(zobrist_hash);
+        }
 
         let alpha = -1_000_000_000;
         let beta = 1_000_000_000;
 
+        let first_move = self
+            .transposition_table
+            .get(self.board.hash())
+            .map(|entry| entry.value);
+
         let mut moves = self.board.generate_moves_vec(!EMPTY);
-        Self::sort_moves(self.board, &mut moves);
+        Self::sort_moves(self.board, &mut moves, first_move);
         for mv in moves {
             if let Ok(board) = self.board.make_move_new(&mv) {
                 legal_moves = true;
@@ -65,7 +89,9 @@ impl<'a> Search<'a> {
             }
         }
 
-        let _ = self.repetition_table.pop();
+        if inserted {
+            let _ = self.repetition_table.remove(&zobrist_hash);
+        }
 
         if !legal_moves {
             if self.board.in_check() {
@@ -80,26 +106,29 @@ impl<'a> Search<'a> {
 
     fn search(&mut self, board: &Board, mut alpha: i32, beta: i32, depth: usize) -> i32 {
         if depth == 0 && !board.in_check() {
-            let zobrist_hash = board.hash();
-            if self.repetition_table.iter().any(|&x| x == zobrist_hash) {
-                return 0;
-            }
-
             return self.search_captures(board, alpha, beta);
         }
 
+        let mut inserted = false;
         let zobrist_hash = board.hash();
-        if self.repetition_table.iter().any(|&x| x == zobrist_hash) {
-            return 0;
+        if !self.repetition_table.contains(&zobrist_hash) {
+            inserted = true;
+            self.repetition_table.insert(zobrist_hash);
         } else {
-            self.repetition_table.push(zobrist_hash);
+            return 0;
         }
 
         let mut legal_moves = false;
         let mut max = i32::MIN;
+        let mut best_move = None;
+
+        let first_move = self
+            .transposition_table
+            .get(board.hash())
+            .map(|entry| entry.value);
 
         let mut moves = board.generate_moves_vec(!EMPTY);
-        Self::sort_moves(board, &mut moves);
+        Self::sort_moves(board, &mut moves, first_move);
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
                 legal_moves = true;
@@ -109,17 +138,28 @@ impl<'a> Search<'a> {
 
                 if score > max {
                     max = score;
+                    best_move = Some(mv);
                     if score > alpha {
                         alpha = score;
                     }
                 }
                 if score >= beta {
+                    if inserted {
+                        let _ = self.repetition_table.remove(&zobrist_hash);
+                    }
                     return score;
                 }
             }
         }
 
-        let _ = self.repetition_table.pop();
+        if inserted {
+            let _ = self.repetition_table.remove(&zobrist_hash);
+        }
+
+        if let Some(best_move) = best_move {
+            self.transposition_table
+                .store(board.hash(), best_move, depth as u8);
+        }
 
         if !legal_moves {
             if board.in_check() {
@@ -144,7 +184,7 @@ impl<'a> Search<'a> {
         }
 
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
-        Self::sort_moves(board, &mut moves);
+        Self::sort_moves(board, &mut moves, None);
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
                 let score = -self.search_captures(&board, -beta, -alpha);
@@ -163,9 +203,19 @@ impl<'a> Search<'a> {
         alpha
     }
 
-    fn sort_moves(board: &Board, moves: &mut [ChessMove]) {
+    fn sort_moves(board: &Board, moves: &mut [ChessMove], first_move: Option<ChessMove>) {
         let pawn_attack_mask = Self::pawn_attack_mask(board, !board.side_to_move);
-        moves.sort_by_key(|mv| -Self::score_move(board, pawn_attack_mask, mv));
+        if let Some(first_move) = first_move {
+            moves.sort_by_key(|mv| {
+                if mv == &first_move {
+                    -1000
+                } else {
+                    -Self::score_move(board, pawn_attack_mask, mv)
+                }
+            });
+        } else {
+            moves.sort_by_key(|mv| -Self::score_move(board, pawn_attack_mask, mv));
+        }
     }
 
     fn score_move(board: &Board, pawn_attack_mask: BitBoard, mv: &ChessMove) -> i32 {
