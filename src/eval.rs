@@ -1,4 +1,4 @@
-use chessframe::{board::Board, color::Color, piece::Piece};
+use chessframe::{board::Board, color::{Color, COLORS}, magic::FILES, piece::Piece};
 
 use crate::piecesquaretable::PieceSquareTable;
 
@@ -32,6 +32,23 @@ impl<'a> Eval<'a> {
             let piece = unsafe { self.board.get_piece(square).unwrap_unchecked() };
             score -= Self::piece_value(&piece)
                 + PieceSquareTable::read(square, piece, Color::Black) as i32;
+        }
+
+        for color in COLORS {
+            let pawns = self.board.pieces_color(Piece::Pawn, color);
+            let mut penalty = 0;
+
+            for file in FILES {
+                penalty += (pawns & file).count_ones().saturating_sub(1) as i32;  
+            }
+
+            if color == Color::White {
+                penalty *= 25;
+            } else {
+                penalty *= -25;
+            }
+
+            score -= penalty;
         }
 
         if self.board.in_check() {

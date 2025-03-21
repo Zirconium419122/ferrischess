@@ -109,7 +109,7 @@ impl<'a> Search<'a> {
             return self.search_captures(board, alpha, beta);
         }
 
-        let mut inserted = false;
+        let inserted;
         let zobrist_hash = board.hash();
         if !self.repetition_table.contains(&zobrist_hash) {
             inserted = true;
@@ -224,7 +224,7 @@ impl<'a> Search<'a> {
         let mut score = 0;
 
         if pawn_attack_mask & BitBoard::from_square(mv.to) != EMPTY {
-            score -= 40;
+            score -= 20;
         }
 
         if let Some(captured) = board.get_piece(mv.to) {
