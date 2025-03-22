@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'  # Runs only when a tag starting with 'v' is pushed
 
+env:
+  CARGO_INCREMENTAL: 0
+
 jobs:
   build-linux:
     name: Build for Linux
@@ -16,6 +19,8 @@ jobs:
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -46,6 +51,8 @@ jobs:
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -76,6 +83,8 @@ jobs:
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
