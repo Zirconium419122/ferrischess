@@ -85,8 +85,7 @@ impl Uci for Engine {
                     }
                 }
                 UciCommand::Go(Go { depth, .. }) => {
-                    let mut repetition_table =
-                        HashSet::from_iter(self.repetition_table.clone());
+                    let mut repetition_table = HashSet::from_iter(self.repetition_table.clone());
                     repetition_table.reserve(16);
 
                     let mut search = Search::new(

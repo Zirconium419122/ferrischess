@@ -2,6 +2,7 @@ use chessframe::{color::Color, piece::Piece, rank::Rank, square::Square};
 
 pub struct PieceSquareTable;
 
+#[rustfmt::skip]
 impl PieceSquareTable {
     pub const PAWN: [i8; 64] = [
           0,  0,  0,  0,  0,  0,  0,  0,

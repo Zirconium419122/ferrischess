@@ -1,4 +1,9 @@
-use chessframe::{board::Board, color::{Color, COLORS}, magic::FILES, piece::Piece};
+use chessframe::{
+    board::Board,
+    color::{Color, COLORS},
+    magic::FILES,
+    piece::Piece,
+};
 
 use crate::piecesquaretable::PieceSquareTable;
 
@@ -39,7 +44,7 @@ impl<'a> Eval<'a> {
             let mut penalty = 0;
 
             for file in FILES {
-                penalty += (pawns & file).count_ones().saturating_sub(1) as i32;  
+                penalty += (pawns & file).count_ones().saturating_sub(1) as i32;
             }
 
             if color == Color::White {

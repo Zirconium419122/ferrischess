@@ -11,10 +11,19 @@ use chessframe::{
 
 use crate::eval::Eval;
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default)]
+enum Bound {
+    #[default]
+    None,
+    Exact,
+    Upper,
+    Lower,
+}
+
 pub struct Search<'a> {
     board: &'a Board,
     search_depth: usize,
-    transposition_table: TranspositionTable<ChessMove>,
+    transposition_table: TranspositionTable<(i32, Bound, ChessMove)>,
     repetition_table: HashSet<u64>,
     pub nodes: usize,
 }
@@ -71,7 +80,7 @@ impl<'a> Search<'a> {
         let first_move = self
             .transposition_table
             .get(self.board.hash())
-            .map(|entry| entry.value);
+            .map(|entry| entry.value.2);
 
         let mut moves = self.board.generate_moves_vec(!EMPTY);
         Self::sort_moves(self.board, &mut moves, first_move);
@@ -118,17 +127,29 @@ impl<'a> Search<'a> {
             return 0;
         }
 
+        let original_alpha = alpha;
         let mut legal_moves = false;
         let mut max = i32::MIN;
         let mut best_move = None;
 
-        let first_move = self
+        let entry = self
             .transposition_table
-            .get(board.hash())
-            .map(|entry| entry.value);
+            .get(board.hash());
+
+        if let Some(entry) = entry {
+            if entry.depth >= depth as u8 {
+                let corrected_score =
+                    Self::correct_mate_score(entry.value.0, self.search_depth - depth);
+                match entry.value.1 {
+                    Bound::Exact => return corrected_score,
+                    Bound::Upper if corrected_score <= alpha => return corrected_score,
+                    _ => {}
+                }
+            }
+        }
 
         let mut moves = board.generate_moves_vec(!EMPTY);
-        Self::sort_moves(board, &mut moves, first_move);
+        Self::sort_moves(board, &mut moves, entry.map(|entry| entry.value.2));
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
                 legal_moves = true;
@@ -144,6 +165,11 @@ impl<'a> Search<'a> {
                     }
                 }
                 if score >= beta {
+                    self.transposition_table.store(
+                        board.hash(),
+                        (beta, Bound::Lower, mv),
+                        depth as u8,
+                    );
                     if inserted {
                         let _ = self.repetition_table.remove(&zobrist_hash);
                     }
@@ -156,17 +182,28 @@ impl<'a> Search<'a> {
             let _ = self.repetition_table.remove(&zobrist_hash);
         }
 
-        if let Some(best_move) = best_move {
-            self.transposition_table
-                .store(board.hash(), best_move, depth as u8);
-        }
-
         if !legal_moves {
             if board.in_check() {
                 return -Eval::MATE_SCORE + self.search_depth as i32 - depth as i32;
             } else {
                 return 0;
             }
+        }
+
+        if let Some(best_move) = best_move {
+            if beta <= max && max <= original_alpha {
+                self.transposition_table.store(
+                    board.hash(),
+                    (max, Bound::Exact, best_move),
+                    depth as u8,
+                );
+            } else if max <= original_alpha {
+                self.transposition_table.store(
+                    board.hash(),
+                    (max, Bound::Upper, best_move),
+                    depth as u8,
+                );
+            };
         }
 
         max
@@ -255,5 +292,13 @@ impl<'a> Search<'a> {
                         & !BitBoard(0x8080808080808080))
             }
         }
+    }
+
+    fn correct_mate_score(score: i32, ply: usize) -> i32 {
+        if score.abs() > Eval::MATE_SCORE - 1000 {
+            let sign = score.signum();
+            return (score * sign - ply as i32) * sign;
+        }
+        score
     }
 }
