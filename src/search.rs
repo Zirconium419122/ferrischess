@@ -23,8 +23,13 @@ enum Bound {
 pub struct Search<'a> {
     board: &'a Board,
     search_depth: usize,
+
     transposition_table: TranspositionTable<(i32, Bound, ChessMove)>,
     repetition_table: HashSet<u64>,
+
+    best_move: Option<ChessMove>,
+    evaluation: i32,
+
     pub nodes: usize,
 }
 
@@ -46,20 +51,22 @@ impl<'a> Search<'a> {
             search_depth: depth,
             repetition_table,
             transposition_table: TranspositionTable::with_size_mb(Search::TRANSPOSITIONTABLE_SIZE),
+            best_move: None,
+            evaluation: 1234567890,
             nodes: 0,
         }
     }
 
     pub fn start_search(&mut self) -> (i32, Option<ChessMove>) {
         let search_depth = self.search_depth;
-        let mut result = None;
 
         for i in 1..=search_depth {
             self.search_depth = i;
-            result = Some(self.search_base());
+
+            (self.evaluation, self.best_move) = self.search_base();
         }
 
-        result.unwrap()
+        (self.evaluation, self.best_move)
     }
 
     pub fn search_base(&mut self) -> (i32, Option<ChessMove>) {
@@ -113,8 +120,12 @@ impl<'a> Search<'a> {
         (max, best_move)
     }
 
-    fn search(&mut self, board: &Board, mut alpha: i32, beta: i32, depth: usize) -> i32 {
-        if depth == 0 && !board.in_check() {
+    fn search(&mut self, board: &Board, mut alpha: i32, beta: i32, mut depth: usize) -> i32 {
+        if board.in_check() {
+            depth += 1;
+        }
+
+        if depth == 0 {
             return self.search_captures(board, alpha, beta);
         }
 
@@ -132,9 +143,7 @@ impl<'a> Search<'a> {
         let mut max = i32::MIN;
         let mut best_move = None;
 
-        let entry = self
-            .transposition_table
-            .get(board.hash());
+        let entry = self.transposition_table.get(board.hash());
 
         if let Some(entry) = entry {
             if entry.depth >= depth as u8 {
@@ -142,6 +151,7 @@ impl<'a> Search<'a> {
                     Self::correct_mate_score(entry.value.0, self.search_depth - depth);
                 match entry.value.1 {
                     Bound::Exact => return corrected_score,
+                    // Bound::Lower if corrected_score >= beta => return corrected_score,
                     Bound::Upper if corrected_score <= alpha => return corrected_score,
                     _ => {}
                 }
@@ -160,20 +170,20 @@ impl<'a> Search<'a> {
                 if score > max {
                     max = score;
                     best_move = Some(mv);
-                    if score > alpha {
-                        alpha = score;
-                    }
+                }
+                if score > alpha {
+                    alpha = score;
                 }
                 if score >= beta {
                     self.transposition_table.store(
                         board.hash(),
-                        (beta, Bound::Lower, mv),
+                        (beta, Bound::Lower, best_move.unwrap_or(mv)),
                         depth as u8,
                     );
                     if inserted {
                         let _ = self.repetition_table.remove(&zobrist_hash);
                     }
-                    return score;
+                    return beta;
                 }
             }
         }
@@ -191,22 +201,22 @@ impl<'a> Search<'a> {
         }
 
         if let Some(best_move) = best_move {
-            if beta <= max && max <= original_alpha {
+            if beta <= alpha && alpha <= original_alpha {
                 self.transposition_table.store(
                     board.hash(),
-                    (max, Bound::Exact, best_move),
+                    (alpha, Bound::Exact, best_move),
                     depth as u8,
                 );
-            } else if max <= original_alpha {
+            } else if alpha <= original_alpha {
                 self.transposition_table.store(
                     board.hash(),
-                    (max, Bound::Upper, best_move),
+                    (alpha, Bound::Upper, best_move),
                     depth as u8,
                 );
             };
         }
 
-        max
+        alpha
     }
 
     fn search_captures(&mut self, board: &Board, mut alpha: i32, beta: i32) -> i32 {

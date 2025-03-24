@@ -1,7 +1,9 @@
 use chessframe::{
+    bitboard::EMPTY,
     board::Board,
     color::{Color, COLORS},
-    magic::FILES,
+    file::File,
+    magic::{get_adjacent_files, FILES},
     piece::Piece,
 };
 
@@ -43,8 +45,13 @@ impl<'a> Eval<'a> {
             let pawns = self.board.pieces_color(Piece::Pawn, color);
             let mut penalty = 0;
 
-            for file in FILES {
-                penalty += (pawns & file).count_ones().saturating_sub(1) as i32;
+            for file in 0..8 {
+                penalty += (pawns & FILES[file]).count_ones().saturating_sub(1) as i32;
+                penalty += if (pawns & get_adjacent_files(File::from_index(file))) == EMPTY {
+                    1
+                } else {
+                    0
+                };
             }
 
             if color == Color::White {
