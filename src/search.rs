@@ -12,7 +12,7 @@ use chessframe::{
 use crate::eval::Eval;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default)]
-enum Bound {
+pub enum Bound {
     #[default]
     None,
     Exact,
@@ -24,8 +24,8 @@ pub struct Search<'a> {
     board: &'a Board,
     search_depth: usize,
 
-    transposition_table: TranspositionTable<(i32, Bound, ChessMove)>,
     repetition_table: HashSet<u64>,
+    transposition_table: &'a mut TranspositionTable<(i32, Bound, ChessMove)>,
 
     best_move: Option<ChessMove>,
     evaluation: i32,
@@ -34,8 +34,6 @@ pub struct Search<'a> {
 }
 
 impl<'a> Search<'a> {
-    const TRANSPOSITIONTABLE_SIZE: usize = 64;
-
     const MVV_LVA: [[i8; 6]; 6] = [
         [15, 14, 13, 12, 11, 10], // victim Pawn, attacker P, N, B, R, Q, K
         [25, 24, 23, 22, 21, 20], // victim Knight, attacker P, N, B, R, Q, K
@@ -45,12 +43,17 @@ impl<'a> Search<'a> {
         [0, 0, 0, 0, 0, 0],       // victim King, attacker P, N, B, R, Q, K
     ];
 
-    pub fn new(board: &Board, depth: usize, repetition_table: HashSet<u64>) -> Search {
+    pub fn new(
+        board: &'a Board,
+        depth: usize,
+        repetition_table: HashSet<u64>,
+        transposition_table: &'a mut TranspositionTable<(i32, Bound, ChessMove)>,
+    ) -> Search<'a> {
         Search {
             board,
             search_depth: depth,
             repetition_table,
-            transposition_table: TranspositionTable::with_size_mb(Search::TRANSPOSITIONTABLE_SIZE),
+            transposition_table,
             best_move: None,
             evaluation: 1234567890,
             nodes: 0,

@@ -1,13 +1,19 @@
 use std::{collections::HashSet, io, str::FromStr};
 
-use chessframe::{board::Board, uci::*};
+use chessframe::{
+    board::Board, chess_move::ChessMove, transpositiontable::TranspositionTable, uci::*,
+};
 
-use crate::{eval::Eval, search::Search};
+use crate::{
+    eval::Eval,
+    search::{Bound, Search},
+};
 
 pub struct Engine {
     board: Board,
     quitting: bool,
     repetition_table: Vec<u64>,
+    transposition_table: TranspositionTable<(i32, Bound, ChessMove)>,
 }
 
 impl Uci for Engine {
@@ -87,16 +93,23 @@ impl Uci for Engine {
                 UciCommand::Go(Go { depth, .. }) => {
                     let mut repetition_table = HashSet::from_iter(self.repetition_table.clone());
                     repetition_table.reserve(16);
+                    let transposition_table = &mut self.transposition_table;
 
-                    let mut search = Search::new(
-                        &self.board,
-                        depth.unwrap_or(6),
-                        repetition_table,
-                    );
-                    let (score, best_move) = search.start_search();
+                    let (score, best_move);
+                    let nodes;
+                    {
+                        let mut search = Search::new(
+                            &self.board,
+                            depth.unwrap_or(6),
+                            repetition_table,
+                            transposition_table,
+                        );
+                        (score, best_move) = search.start_search();
+                        nodes = search.nodes;
+                    }
 
                     if let Some(best_move) = best_move {
-                        if score.abs() >= Eval::MATE_SCORE - 100 {
+                        if score.abs() >= Eval::MATE_SCORE - 1000 {
                             let correction = if score > 0 { 1 } else { -1 };
                             let moves_to_mate = Eval::MATE_SCORE - score.abs();
                             let mate_in_moves = (moves_to_mate / 2) + 1;
@@ -109,7 +122,7 @@ impl Uci for Engine {
                             self.send_command(UciCommand::Info(Info {
                                 pv: Some(best_move.to_string()),
                                 score: Some(score),
-                                nodes: Some(search.nodes),
+                                nodes: Some(nodes),
                                 ..Default::default()
                             }));
                         } else {
@@ -123,7 +136,7 @@ impl Uci for Engine {
                             self.send_command(UciCommand::Info(Info {
                                 pv: Some(best_move.to_string()),
                                 score: Some(score),
-                                nodes: Some(search.nodes),
+                                nodes: Some(nodes),
                                 ..Default::default()
                             }));
                         }
@@ -142,11 +155,14 @@ impl Uci for Engine {
 }
 
 impl Engine {
+    const TRANSPOSITIONTABLE_SIZE: usize = 64;
+
     pub fn new() -> Engine {
         Engine {
             board: Board::default(),
             quitting: false,
             repetition_table: Vec::new(),
+            transposition_table: TranspositionTable::with_size_mb(Engine::TRANSPOSITIONTABLE_SIZE),
         }
     }
 
