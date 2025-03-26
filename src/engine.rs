@@ -95,7 +95,7 @@ impl Uci for Engine {
                     repetition_table.reserve(16);
                     let transposition_table = &mut self.transposition_table;
 
-                    let (score, best_move);
+                    let (score, best_move, pv);
                     let nodes;
                     {
                         let mut search = Search::new(
@@ -104,9 +104,10 @@ impl Uci for Engine {
                             repetition_table,
                             transposition_table,
                         );
-                        (score, best_move) = search.start_search();
+                        (score, best_move, pv) = search.start_search();
                         nodes = search.nodes;
                     }
+                    let pv = pv.iter().map(|mv| mv.to_string()).collect::<Vec<String>>().join(" ");
 
                     if let Some(best_move) = best_move {
                         if score.abs() >= Eval::MATE_SCORE - 1000 {
@@ -120,7 +121,7 @@ impl Uci for Engine {
                             };
 
                             self.send_command(UciCommand::Info(Info {
-                                pv: Some(best_move.to_string()),
+                                pv: Some(pv),
                                 score: Some(score),
                                 nodes: Some(nodes),
                                 ..Default::default()
@@ -134,7 +135,7 @@ impl Uci for Engine {
                             };
 
                             self.send_command(UciCommand::Info(Info {
-                                pv: Some(best_move.to_string()),
+                                pv: Some(pv),
                                 score: Some(score),
                                 nodes: Some(nodes),
                                 ..Default::default()

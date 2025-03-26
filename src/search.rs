@@ -29,6 +29,7 @@ pub struct Search<'a> {
 
     best_move: Option<ChessMove>,
     evaluation: i32,
+    pv: Vec<ChessMove>,
 
     pub nodes: usize,
 }
@@ -56,11 +57,12 @@ impl<'a> Search<'a> {
             transposition_table,
             best_move: None,
             evaluation: 1234567890,
+            pv: Vec::new(),
             nodes: 0,
         }
     }
 
-    pub fn start_search(&mut self) -> (i32, Option<ChessMove>) {
+    pub fn start_search(&mut self) -> (i32, Option<ChessMove>, Vec<ChessMove>) {
         let search_depth = self.search_depth;
 
         for i in 1..=search_depth {
@@ -69,7 +71,7 @@ impl<'a> Search<'a> {
             (self.evaluation, self.best_move) = self.search_base();
         }
 
-        (self.evaluation, self.best_move)
+        (self.evaluation, self.best_move, self.pv.clone())
     }
 
     pub fn search_base(&mut self) -> (i32, Option<ChessMove>) {
@@ -96,14 +98,18 @@ impl<'a> Search<'a> {
         Self::sort_moves(self.board, &mut moves, first_move);
         for mv in moves {
             if let Ok(board) = self.board.make_move_new(&mv) {
-                legal_moves = true;
-                let score = -self.search(&board, alpha, beta, self.search_depth - 1);
+                let mut base_pv = Vec::new();
 
-                self.nodes += 1;
+                legal_moves = true;
+                let score = -self.search(&board, alpha, beta, self.search_depth - 1, &mut base_pv);
 
                 if score > max {
                     max = score;
                     best_move = Some(mv);
+
+                    self.pv.clear();
+                    self.pv.push(mv);
+                    self.pv.append(&mut base_pv);
                 }
             }
         }
@@ -123,7 +129,7 @@ impl<'a> Search<'a> {
         (max, best_move)
     }
 
-    fn search(&mut self, board: &Board, mut alpha: i32, beta: i32, mut depth: usize) -> i32 {
+    fn search(&mut self, board: &Board, mut alpha: i32, beta: i32, mut depth: usize, pv: &mut Vec<ChessMove>) -> i32 {
         if board.in_check() {
             depth += 1;
         }
@@ -131,6 +137,8 @@ impl<'a> Search<'a> {
         if depth == 0 {
             return self.search_captures(board, alpha, beta);
         }
+
+        self.nodes += 1;
 
         let inserted;
         let zobrist_hash = board.hash();
@@ -165,10 +173,10 @@ impl<'a> Search<'a> {
         Self::sort_moves(board, &mut moves, entry.map(|entry| entry.value.2));
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
-                legal_moves = true;
-                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1));
+                let mut node_pv = Vec::new();
 
-                self.nodes += 1;
+                legal_moves = true;
+                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1), &mut node_pv);
 
                 if score > max {
                     max = score;
@@ -176,6 +184,10 @@ impl<'a> Search<'a> {
                 }
                 if score > alpha {
                     alpha = score;
+
+                    pv.clear();
+                    pv.push(mv);
+                    pv.append(&mut node_pv);
                 }
                 if score >= beta {
                     self.transposition_table.store(
@@ -227,19 +239,20 @@ impl<'a> Search<'a> {
 
         let eval = Eval::new(board).eval();
         if eval + EVAL_MARGIN >= beta {
+            self.nodes += 1;
             return eval;
         }
         if eval > alpha {
             alpha = eval;
         }
 
+        self.nodes += 1;
+
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
         Self::sort_moves(board, &mut moves, None);
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
                 let score = -self.search_captures(&board, -beta, -alpha);
-
-                self.nodes += 1;
 
                 if score >= beta {
                     return score;
