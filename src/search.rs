@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Instant};
 
 use chessframe::{
     bitboard::{BitBoard, EMPTY},
@@ -27,14 +27,28 @@ pub struct Search<'a> {
     repetition_table: HashSet<u64>,
     transposition_table: &'a mut TranspositionTable<(i32, Bound, ChessMove)>,
 
-    best_move: Option<ChessMove>,
     evaluation: i32,
+    best_move: ChessMove,
     pv: Vec<ChessMove>,
 
+    evaluation_iteration: i32,
+    best_move_iteration: ChessMove,
+    pv_iteration: Vec<ChessMove>,
+
     pub nodes: usize,
+
+    time: usize,
+    think_timer: Instant,
+    pub time_management: bool,
+
+    cancelled: bool,
 }
 
 impl<'a> Search<'a> {
+    pub const NULL_MOVE: ChessMove = unsafe { std::mem::transmute::<[u8; 3], ChessMove>([0; 3]) };
+
+    const MAX_PLY: usize = 256;
+
     const MVV_LVA: [[i8; 6]; 6] = [
         [15, 14, 13, 12, 11, 10], // victim Pawn, attacker P, N, B, R, Q, K
         [25, 24, 23, 22, 21, 20], // victim Knight, attacker P, N, B, R, Q, K
@@ -53,31 +67,77 @@ impl<'a> Search<'a> {
         Search {
             board,
             search_depth: depth,
+
             repetition_table,
             transposition_table,
-            best_move: None,
+
             evaluation: 1234567890,
+            best_move: Search::NULL_MOVE,
             pv: Vec::new(),
+
+            evaluation_iteration: 1234567890,
+            best_move_iteration: Search::NULL_MOVE,
+            pv_iteration: Vec::new(),
+
             nodes: 0,
+
+            time: 0,
+            think_timer: Instant::now(),
+            time_management: false,
+
+            cancelled: false,
         }
     }
 
-    pub fn start_search(&mut self) -> (i32, Option<ChessMove>, Vec<ChessMove>) {
-        let search_depth = self.search_depth;
+    pub fn start_search(
+        &mut self,
+        time: usize,
+        time_inc: usize,
+    ) -> (i32, ChessMove, Vec<ChessMove>) {
+        let search_depth = if self.time_management {
+            Search::MAX_PLY
+        } else {
+            self.search_depth
+        };
 
+        self.cancelled = false;
+        self.best_move = Search::NULL_MOVE;
+
+        self.time = (time / 20 + time_inc / 2).max(5);
+
+        self.think_timer = Instant::now();
         for i in 1..=search_depth {
-            self.search_depth = i;
+            (self.evaluation_iteration, self.best_move_iteration) = (0, Search::NULL_MOVE);
 
-            (self.evaluation, self.best_move) = self.search_base();
+            self.search_depth = i;
+            (self.evaluation_iteration, self.best_move_iteration) = self.search_base();
+
+            let cancelled_prematurly = self.best_move_iteration == Search::NULL_MOVE;
+            if !cancelled_prematurly {
+                self.pv = self.pv_iteration.clone();
+                (self.evaluation, self.best_move) =
+                    (self.evaluation_iteration, self.best_move_iteration);
+            }
+
+            if self.cancelled {
+                break;
+            }
         }
 
         (self.evaluation, self.best_move, self.pv.clone())
     }
 
-    pub fn search_base(&mut self) -> (i32, Option<ChessMove>) {
+    pub fn should_cancel_search(&mut self) -> bool {
+        if self.think_timer.elapsed().as_millis() as usize >= self.time && self.time_management {
+            self.cancelled = true;
+        }
+        self.cancelled
+    }
+
+    pub fn search_base(&mut self) -> (i32, ChessMove) {
         let mut legal_moves = false;
         let mut max = i32::MIN;
-        let mut best_move = None;
+        let mut best_move = Search::NULL_MOVE;
 
         let mut inserted = false;
         let zobrist_hash = self.board.hash();
@@ -103,13 +163,17 @@ impl<'a> Search<'a> {
                 legal_moves = true;
                 let score = -self.search(&board, alpha, beta, self.search_depth - 1, &mut base_pv);
 
+                if self.should_cancel_search() {
+                    return (0, Search::NULL_MOVE);
+                }
+
                 if score > max {
                     max = score;
-                    best_move = Some(mv);
+                    best_move = mv;
 
-                    self.pv.clear();
-                    self.pv.push(mv);
-                    self.pv.append(&mut base_pv);
+                    self.pv_iteration.clear();
+                    self.pv_iteration.push(mv);
+                    self.pv_iteration.append(&mut base_pv);
                 }
             }
         }
@@ -120,16 +184,27 @@ impl<'a> Search<'a> {
 
         if !legal_moves {
             if self.board.in_check() {
-                return (-Eval::MATE_SCORE, None);
+                return (-Eval::MATE_SCORE, Search::NULL_MOVE);
             } else {
-                return (0, None);
+                return (0, Search::NULL_MOVE);
             }
         }
 
         (max, best_move)
     }
 
-    fn search(&mut self, board: &Board, mut alpha: i32, beta: i32, mut depth: usize, pv: &mut Vec<ChessMove>) -> i32 {
+    fn search(
+        &mut self,
+        board: &Board,
+        mut alpha: i32,
+        beta: i32,
+        mut depth: usize,
+        pv: &mut Vec<ChessMove>,
+    ) -> i32 {
+        if self.should_cancel_search() {
+            return 0;
+        }
+
         if board.in_check() {
             depth += 1;
         }

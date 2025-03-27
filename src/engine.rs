@@ -1,7 +1,8 @@
 use std::{collections::HashSet, io, str::FromStr};
 
 use chessframe::{
-    board::Board, chess_move::ChessMove, transpositiontable::TranspositionTable, uci::*,
+    board::Board, chess_move::ChessMove, color::Color, transpositiontable::TranspositionTable,
+    uci::*,
 };
 
 use crate::{
@@ -90,10 +91,23 @@ impl Uci for Engine {
                         }
                     }
                 }
-                UciCommand::Go(Go { depth, .. }) => {
+                UciCommand::Go(Go {
+                    depth,
+                    wtime,
+                    winc,
+                    btime,
+                    binc,
+                    ..
+                }) => {
                     let mut repetition_table = HashSet::from_iter(self.repetition_table.clone());
                     repetition_table.reserve(16);
                     let transposition_table = &mut self.transposition_table;
+
+                    let (time, time_inc) = if self.board.side_to_move == Color::White {
+                        (wtime, winc)
+                    } else {
+                        (btime, binc)
+                    };
 
                     let (score, best_move, pv);
                     let nodes;
@@ -104,12 +118,19 @@ impl Uci for Engine {
                             repetition_table,
                             transposition_table,
                         );
-                        (score, best_move, pv) = search.start_search();
+                        search.time_management = time.unwrap_or(0) > 0;
+
+                        (score, best_move, pv) =
+                            search.start_search(time.unwrap_or(0), time_inc.unwrap_or(0));
                         nodes = search.nodes;
                     }
-                    let pv = pv.iter().map(|mv| mv.to_string()).collect::<Vec<String>>().join(" ");
+                    let pv = pv
+                        .iter()
+                        .map(|mv| mv.to_string())
+                        .collect::<Vec<String>>()
+                        .join(" ");
 
-                    if let Some(best_move) = best_move {
+                    if best_move != Search::NULL_MOVE {
                         if score.abs() >= Eval::MATE_SCORE - 1000 {
                             let correction = if score > 0 { 1 } else { -1 };
                             let moves_to_mate = Eval::MATE_SCORE - score.abs();
