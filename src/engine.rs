@@ -118,7 +118,7 @@ impl Uci for Engine {
                             repetition_table,
                             transposition_table,
                         );
-                        search.time_management = time.unwrap_or(0) > 0;
+                        search.time_management = time.is_some();
 
                         (score, best_move, pv) =
                             search.start_search(time.unwrap_or(0), time_inc.unwrap_or(0));

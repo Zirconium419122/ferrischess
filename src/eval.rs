@@ -29,16 +29,18 @@ impl<'a> Eval<'a> {
     pub fn eval(&self) -> i32 {
         let mut score = 0;
 
+        let game_phase = self.calculate_game_phase();
+
         for square in self.board.occupancy(Color::White) {
             let piece = unsafe { self.board.get_piece(square).unwrap_unchecked() };
             score += Self::piece_value(&piece)
-                + PieceSquareTable::read(square, piece, Color::White) as i32;
+                + PieceSquareTable::read(square, piece, Color::White, game_phase) as i32;
         }
 
         for square in self.board.occupancy(Color::Black) {
             let piece = unsafe { self.board.get_piece(square).unwrap_unchecked() };
             score -= Self::piece_value(&piece)
-                + PieceSquareTable::read(square, piece, Color::Black) as i32;
+                + PieceSquareTable::read(square, piece, Color::Black, game_phase) as i32;
         }
 
         for color in COLORS {
@@ -73,5 +75,18 @@ impl<'a> Eval<'a> {
             -1
         };
         score * perspective
+    }
+
+    fn calculate_game_phase(&self) -> f32 {
+        let mut phase = 0;
+        let total_phase = 24;
+
+        phase += self.board.pieces(Piece::Knight).count_ones();
+        phase += self.board.pieces(Piece::Bishop).count_ones();
+        phase += 2 * self.board.pieces(Piece::Rook).count_ones();
+        phase += 4 * self.board.pieces(Piece::Queen).count_ones();
+
+        let clamped = phase.min(total_phase);
+        1.0 - (clamped as f32 / total_phase as f32)
     }
 }

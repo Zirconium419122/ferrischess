@@ -70,6 +70,17 @@ impl PieceSquareTable {
          25, 30, 10,  0,  0, 10, 30, 25,
     ];
 
+    pub const KING_END: [i8; 64] = [
+        -50,-40,-30,-20,-20,-30,-40,-50,
+        -30,-20,-10,  0,  0,-10,-20,-30,
+        -30,-10, 20, 30, 30, 20,-10,-30,
+        -30,-10, 30, 40, 40, 30,-10,-30,
+        -30,-10, 30, 40, 40, 30,-10,-30,
+        -30,-10, 20, 30, 30, 20,-10,-30,
+        -30,-30,  0,  0,  0,  0,-30,-30,
+        -50,-30,-30,-30,-30,-30,-30,-50,
+    ];
+
     pub const TABLES: [[i8; 64]; 6] = [
         Self::PAWN,
         Self::KNIGHT,
@@ -79,7 +90,7 @@ impl PieceSquareTable {
         Self::KING,
     ];
 
-    pub fn read(square: Square, piece: Piece, color: Color) -> i8 {
+    pub fn read(square: Square, piece: Piece, color: Color, game_phase: f32) -> i8 {
         let mut square = square;
 
         if color == Color::White {
@@ -87,6 +98,18 @@ impl PieceSquareTable {
             let rank = Rank::from_index(7 - square.rank().to_index());
 
             square = Square::make_square(rank, file);
+        }
+
+        if piece == Piece::King {
+            let king_start = unsafe {
+                Self::KING.get_unchecked(square.to_index())
+            };
+            let king_end = unsafe {
+                Self::KING_END.get_unchecked(square.to_index())
+            };
+            let interpolated = ((*king_start as f32 * (1.0 - game_phase)) + (*king_end as f32 * game_phase)).trunc() as i8;
+
+            return interpolated;
         }
 
         unsafe {
