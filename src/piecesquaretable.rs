@@ -15,6 +15,17 @@ impl PieceSquareTable {
           0,  0,  0,  0,  0,  0,  0,  0,
     ];
 
+    pub const PAWN_END: [i8; 64] = [
+          0,  0,  0,  0,  0,  0,  0,  0,
+         80, 80, 80, 80, 80, 80, 80, 80,
+         50, 50, 50, 50, 50, 50, 50, 50,
+         30, 30, 30, 30, 30, 30, 30, 30,
+         20, 20, 20, 20, 20, 20, 20, 20,
+         10, 10, 10, 10, 10, 10, 10, 10,
+         10, 10, 10, 10, 10, 10, 10, 10,
+          0,  0,  0,  0,  0,  0,  0,  0,
+    ];
+
     pub const KNIGHT: [i8; 64] = [
         -50,-40,-30,-30,-30,-30,-40,-50,
         -40,-20,  0,  0,  0,  0,-20,-40,
@@ -100,7 +111,17 @@ impl PieceSquareTable {
             square = Square::make_square(rank, file);
         }
 
-        if piece == Piece::King {
+        if piece == Piece::Pawn {
+            let pawn_start = unsafe {
+                Self::PAWN.get_unchecked(square.to_index())
+            };
+            let pawn_end = unsafe {
+                Self::PAWN_END.get_unchecked(square.to_index())
+            };
+            let interpolated = ((*pawn_start as f32 * (1.0 - game_phase)) + (*pawn_end as f32 * game_phase)).trunc() as i8;
+
+            return interpolated;
+        } else if piece == Piece::King {
             let king_start = unsafe {
                 Self::KING.get_unchecked(square.to_index())
             };
