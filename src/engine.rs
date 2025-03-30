@@ -7,7 +7,7 @@ use chessframe::{
 
 use crate::{
     eval::Eval,
-    search::{Bound, Search},
+    search::{Bound, Search, TimeManagement},
 };
 
 pub struct Engine {
@@ -97,6 +97,7 @@ impl Uci for Engine {
                     winc,
                     btime,
                     binc,
+                    move_time,
                     ..
                 }) => {
                     let mut repetition_table = HashSet::from_iter(self.repetition_table.clone());
@@ -118,10 +119,16 @@ impl Uci for Engine {
                             repetition_table,
                             transposition_table,
                         );
-                        search.time_management = time.is_some();
+                        search.time_management = if move_time.is_some() {
+                            TimeManagement::MoveTime
+                        } else if time.is_some() {
+                            TimeManagement::TimeLeft
+                        } else {
+                            TimeManagement::None
+                        };
 
                         (score, best_move, pv) =
-                            search.start_search(time.unwrap_or(0), time_inc.unwrap_or(0));
+                            search.start_search(time.unwrap_or(move_time.unwrap_or(0)), time_inc.unwrap_or(0));
                         nodes = search.nodes;
                     }
                     let pv = pv

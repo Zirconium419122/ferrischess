@@ -20,6 +20,14 @@ pub enum Bound {
     Lower,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default)]
+pub enum TimeManagement {
+    #[default]
+    None,
+    MoveTime,
+    TimeLeft,
+}
+
 pub struct Search<'a> {
     board: &'a Board,
     search_depth: usize,
@@ -39,7 +47,7 @@ pub struct Search<'a> {
 
     time: usize,
     think_timer: Instant,
-    pub time_management: bool,
+    pub time_management: TimeManagement,
 
     cancelled: bool,
 }
@@ -83,7 +91,7 @@ impl<'a> Search<'a> {
 
             time: 0,
             think_timer: Instant::now(),
-            time_management: false,
+            time_management: TimeManagement::None,
 
             cancelled: false,
         }
@@ -94,7 +102,7 @@ impl<'a> Search<'a> {
         time: usize,
         time_inc: usize,
     ) -> (i32, ChessMove, Vec<ChessMove>) {
-        let search_depth = if self.time_management {
+        let search_depth = if self.time_management != TimeManagement::None {
             Search::MAX_PLY
         } else {
             self.search_depth
@@ -103,7 +111,11 @@ impl<'a> Search<'a> {
         self.cancelled = false;
         self.best_move = Search::NULL_MOVE;
 
-        self.time = (time / 20 + time_inc / 2).max(5);
+        self.time = if self.time_management == TimeManagement::TimeLeft {
+            (time / 20 + time_inc / 2).max(5)
+        } else {
+            time.max(5)
+        };
 
         self.think_timer = Instant::now();
         for i in 1..=search_depth {
@@ -128,7 +140,7 @@ impl<'a> Search<'a> {
     }
 
     pub fn should_cancel_search(&mut self) -> bool {
-        if self.think_timer.elapsed().as_millis() as usize >= self.time && self.time_management {
+        if self.think_timer.elapsed().as_millis() as usize >= self.time && self.time_management != TimeManagement::None {
             self.cancelled = true;
         }
         self.cancelled
