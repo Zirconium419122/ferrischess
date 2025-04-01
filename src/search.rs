@@ -117,18 +117,44 @@ impl<'a> Search<'a> {
             time.max(5)
         };
 
+        const WINDOW: i32 = 25;
+
+        let mut evaluation = 0;
+
         self.think_timer = Instant::now();
-        for i in 1..=search_depth {
-            (self.evaluation_iteration, self.best_move_iteration) = (0, Search::NULL_MOVE);
+        for depth in 1..=search_depth {
+            self.search_depth = depth;
 
-            self.search_depth = i;
-            (self.evaluation_iteration, self.best_move_iteration) = self.search_base();
+            let mut first_try = true;
 
-            let cancelled_prematurly = self.best_move_iteration == Search::NULL_MOVE;
-            if !cancelled_prematurly {
-                self.pv = self.pv_iteration.clone();
-                (self.evaluation, self.best_move) =
-                    (self.evaluation_iteration, self.best_move_iteration);
+            loop {
+                let (alpha, beta) = if first_try && depth > 6 {
+                    (evaluation - WINDOW, evaluation + WINDOW)
+                } else {
+                    (-Eval::MATE_SCORE, Eval::MATE_SCORE)
+                };
+
+                (self.evaluation_iteration, self.best_move_iteration) =
+                    self.search_base(alpha, beta);
+
+                evaluation = self.evaluation_iteration;
+
+                if self.cancelled {
+                    break;
+                }
+
+                if (evaluation <= alpha || evaluation >= beta) && first_try {
+                    first_try = false;
+                    continue;
+                }
+
+                if self.best_move_iteration != Search::NULL_MOVE {
+                    self.pv = self.pv_iteration.clone();
+                    self.evaluation = self.evaluation_iteration;
+                    self.best_move = self.best_move_iteration;
+                }
+
+                break;
             }
 
             if self.cancelled {
@@ -146,7 +172,7 @@ impl<'a> Search<'a> {
         self.cancelled
     }
 
-    pub fn search_base(&mut self) -> (i32, ChessMove) {
+    pub fn search_base(&mut self, alpha: i32, beta: i32) -> (i32, ChessMove) {
         let mut legal_moves = false;
         let mut max = i32::MIN;
         let mut best_move = Search::NULL_MOVE;
@@ -157,9 +183,6 @@ impl<'a> Search<'a> {
             inserted = true;
             self.repetition_table.insert(zobrist_hash);
         }
-
-        let alpha = -1_000_000_000;
-        let beta = 1_000_000_000;
 
         let first_move = self
             .transposition_table
