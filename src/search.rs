@@ -127,24 +127,26 @@ impl<'a> Search<'a> {
 
             let mut first_try = true;
 
-            loop {
-                let (alpha, beta) = if first_try && depth > 6 {
-                    (evaluation - WINDOW, evaluation + WINDOW)
-                } else {
-                    (-Eval::MATE_SCORE, Eval::MATE_SCORE)
-                };
+            let (mut alpha, mut beta) = if depth > 6 {
+                (evaluation - WINDOW, evaluation + WINDOW)
+            } else {
+                (-Eval::MATE_SCORE, Eval::MATE_SCORE)
+            };
 
+            loop {
                 (self.evaluation_iteration, self.best_move_iteration) =
                     self.search_base(alpha, beta);
 
                 evaluation = self.evaluation_iteration;
 
-                if self.cancelled {
-                    break;
-                }
-
-                if (evaluation <= alpha || evaluation >= beta) && first_try {
+                if evaluation <= alpha && first_try {
                     first_try = false;
+                    alpha = -Eval::MATE_SCORE;
+                    continue;
+                }
+                if evaluation >= beta && first_try {
+                    first_try = false;
+                    beta = Eval::MATE_SCORE;
                     continue;
                 }
 
