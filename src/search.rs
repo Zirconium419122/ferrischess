@@ -11,6 +11,9 @@ use chessframe::{
 
 use crate::eval::Eval;
 
+// Let's just use 1 billion instead of i32::MAX since I'm scared of overflow and underflow.
+pub const INFINITY: i32 = 1_000_000_000;
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default)]
 pub enum Bound {
     #[default]
@@ -117,7 +120,12 @@ impl<'a> Search<'a> {
             time.max(5)
         };
 
-        const WINDOW: i32 = 25;
+        const WINDOWS: [i32; 4] = [
+            20,
+            80,
+            320,
+            INFINITY,
+        ];
 
         let mut evaluation = 0;
 
@@ -125,12 +133,12 @@ impl<'a> Search<'a> {
         for depth in 1..=search_depth {
             self.search_depth = depth;
 
-            let mut first_try = true;
+            let mut tries = 1;
 
             let (mut alpha, mut beta) = if depth > 6 {
-                (evaluation - WINDOW, evaluation + WINDOW)
+                (evaluation - WINDOWS[0], evaluation + WINDOWS[0])
             } else {
-                (-Eval::MATE_SCORE, Eval::MATE_SCORE)
+                (-INFINITY, INFINITY)
             };
 
             loop {
@@ -139,14 +147,16 @@ impl<'a> Search<'a> {
 
                 evaluation = self.evaluation_iteration;
 
-                if evaluation <= alpha && first_try {
-                    first_try = false;
-                    alpha = -Eval::MATE_SCORE;
+                if evaluation <= alpha && tries < WINDOWS.len() - 1 {
+                    alpha = evaluation.saturating_sub(WINDOWS[tries]);
+                    tries += 1;
+
                     continue;
                 }
-                if evaluation >= beta && first_try {
-                    first_try = false;
-                    beta = Eval::MATE_SCORE;
+                if evaluation >= beta && tries < WINDOWS.len() - 1 {
+                    beta = evaluation.saturating_add(WINDOWS[tries]);
+                    tries += 1;
+
                     continue;
                 }
 

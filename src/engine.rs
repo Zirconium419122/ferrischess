@@ -138,7 +138,7 @@ impl Uci for Engine {
                         .join(" ");
 
                     if best_move != Search::NULL_MOVE {
-                        if score.abs() >= Eval::MATE_SCORE - 1000 {
+                        if Eval::mate_score(score) {
                             let correction = if score > 0 { 1 } else { -1 };
                             let moves_to_mate = Eval::MATE_SCORE - score.abs();
                             let mate_in_moves = (moves_to_mate / 2) + 1;

@@ -16,7 +16,7 @@ pub struct Eval<'a> {
 }
 
 impl<'a> Eval<'a> {
-    pub const MATE_SCORE: i32 = 1_000_000_000;
+    pub const MATE_SCORE: i32 = 100_000_000;
 
     pub fn new(board: &Board) -> Eval {
         Eval { board }
@@ -88,5 +88,9 @@ impl<'a> Eval<'a> {
 
         let clamped = phase.min(total_phase);
         1.0 - (clamped as f32 / total_phase as f32)
+    }
+
+    pub fn mate_score(score: i32) -> bool {
+        score.abs() >= Eval::MATE_SCORE - 1000
     }
 }
