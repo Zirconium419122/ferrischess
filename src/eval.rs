@@ -15,7 +15,7 @@ pub struct Eval<'a> {
     board: &'a Board,
 }
 
-impl<'a> Eval<'a> {
+impl Eval<'_> {
     pub const MATE_SCORE: i32 = 100_000_000;
 
     pub fn new(board: &Board) -> Eval {

@@ -127,8 +127,10 @@ impl Uci for Engine {
                             TimeManagement::None
                         };
 
-                        (score, best_move, pv) =
-                            search.start_search(time.unwrap_or(move_time.unwrap_or(0)), time_inc.unwrap_or(0));
+                        (score, best_move, pv) = search.start_search(
+                            time.unwrap_or(move_time.unwrap_or(0)),
+                            time_inc.unwrap_or(0),
+                        );
                         nodes = search.nodes;
                     }
                     let pv = pv
