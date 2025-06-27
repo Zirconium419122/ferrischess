@@ -178,7 +178,9 @@ impl<'a> Search<'a> {
     }
 
     pub fn should_cancel_search(&mut self) -> bool {
-        if self.think_timer.elapsed().as_millis() as usize >= self.time && self.time_management != TimeManagement::None {
+        if self.think_timer.elapsed().as_millis() as usize >= self.time
+            && self.time_management != TimeManagement::None
+        {
             self.cancelled = true;
         }
         self.cancelled
