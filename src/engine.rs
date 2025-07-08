@@ -70,13 +70,18 @@ impl Uci for Engine {
                     }
                 }
                 UciCommand::IsReady => self.send_command(UciCommand::ReadyOk),
-                UciCommand::UciNewGame => self.board = Board::default(),
+                UciCommand::UciNewGame => {
+                    self.board = Board::default();
+                    self.repetition_table.clear();
+                    self.transposition_table.clear();
+                }
                 UciCommand::Position { fen, moves } => {
                     if fen == "startpos" {
                         self.board = Board::default();
                     } else {
                         self.board = Board::from_fen(&fen);
                     };
+                    self.repetition_table.clear();
 
                     if let Some(moves) = moves {
                         let board = &mut self.board;
@@ -115,7 +120,7 @@ impl Uci for Engine {
                     {
                         let mut search = Search::new(
                             &self.board,
-                            depth.unwrap_or(6),
+                            depth.unwrap_or(6) as u8,
                             repetition_table,
                             transposition_table,
                         );
@@ -141,12 +146,11 @@ impl Uci for Engine {
 
                     if best_move != Search::NULL_MOVE {
                         if Eval::mate_score(score) {
-                            let correction = if score > 0 { 1 } else { -1 };
                             let moves_to_mate = Eval::MATE_SCORE - score.abs();
                             let mate_in_moves = (moves_to_mate / 2) + 1;
 
                             let score = Score {
-                                mate: Some(correction as isize * mate_in_moves as isize),
+                                mate: Some(score.signum() as isize * mate_in_moves as isize),
                                 ..Default::default()
                             };
 

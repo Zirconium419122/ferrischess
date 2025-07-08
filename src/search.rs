@@ -33,7 +33,7 @@ pub enum TimeManagement {
 
 pub struct Search<'a> {
     board: &'a Board,
-    search_depth: usize,
+    search_depth: u8,
 
     repetition_table: HashSet<u64>,
     transposition_table: &'a mut TranspositionTable<(i32, Bound, ChessMove)>,
@@ -58,7 +58,7 @@ pub struct Search<'a> {
 impl<'a> Search<'a> {
     pub const NULL_MOVE: ChessMove = unsafe { std::mem::transmute::<[u8; 3], ChessMove>([0; 3]) };
 
-    const MAX_PLY: usize = 256;
+    const MAX_PLY: u8 = 255;
 
     const MVV_LVA: [[i8; 6]; 6] = [
         [15, 14, 13, 12, 11, 10], // victim Pawn, attacker P, N, B, R, Q, K
@@ -71,7 +71,7 @@ impl<'a> Search<'a> {
 
     pub fn new(
         board: &'a Board,
-        depth: usize,
+        depth: u8,
         repetition_table: HashSet<u64>,
         transposition_table: &'a mut TranspositionTable<(i32, Bound, ChessMove)>,
     ) -> Search<'a> {
@@ -120,10 +120,9 @@ impl<'a> Search<'a> {
             time.max(5)
         };
 
-        const WINDOWS: [i32; 4] = [
+        const WINDOWS: [i32; 3] = [
             20,
-            80,
-            320,
+            400,
             INFINITY,
         ];
 
@@ -247,7 +246,7 @@ impl<'a> Search<'a> {
         board: &Board,
         mut alpha: i32,
         beta: i32,
-        mut depth: usize,
+        mut depth: u8,
         pv: &mut Vec<ChessMove>,
     ) -> i32 {
         if self.should_cancel_search() {
@@ -281,7 +280,7 @@ impl<'a> Search<'a> {
         let entry = self.transposition_table.get(board.hash());
 
         if let Some(entry) = entry {
-            if entry.depth >= depth as u8 {
+            if entry.depth >= depth {
                 let corrected_score =
                     Self::correct_mate_score(entry.value.0, self.search_depth - depth);
                 match entry.value.1 {
@@ -316,8 +315,8 @@ impl<'a> Search<'a> {
                 if score >= beta {
                     self.transposition_table.store(
                         board.hash(),
-                        (beta, Bound::Lower, best_move.unwrap_or(mv)),
-                        depth as u8,
+                        (score, Bound::Lower, mv),
+                        depth,
                     );
                     if inserted {
                         let _ = self.repetition_table.remove(&zobrist_hash);
@@ -340,19 +339,25 @@ impl<'a> Search<'a> {
         }
 
         if let Some(best_move) = best_move {
-            if beta <= alpha && alpha <= original_alpha {
+            if alpha >= beta && alpha <= original_alpha {
                 self.transposition_table.store(
                     board.hash(),
                     (alpha, Bound::Exact, best_move),
-                    depth as u8,
+                    depth,
                 );
             } else if alpha <= original_alpha {
                 self.transposition_table.store(
                     board.hash(),
                     (alpha, Bound::Upper, best_move),
-                    depth as u8,
+                    depth,
                 );
-            };
+            } else if alpha >= beta {
+                self.transposition_table.store(
+                    board.hash(),
+                    (beta, Bound::Lower, best_move),
+                    depth,
+                );
+            }
         }
 
         alpha
@@ -444,7 +449,7 @@ impl<'a> Search<'a> {
         }
     }
 
-    fn correct_mate_score(score: i32, ply: usize) -> i32 {
+    fn correct_mate_score(score: i32, ply: u8) -> i32 {
         if score.abs() > Eval::MATE_SCORE - 1000 {
             let sign = score.signum();
             return (score * sign - ply as i32) * sign;
