@@ -212,6 +212,9 @@ impl<'a> Search<'a> {
                 let score = -self.search(&board, alpha, beta, self.search_depth - 1, &mut base_pv);
 
                 if self.should_cancel_search() {
+                    if inserted {
+                        let _ = self.repetition_table.remove(&zobrist_hash);
+                    }
                     return (0, Search::NULL_MOVE);
                 }
 
@@ -263,10 +266,8 @@ impl<'a> Search<'a> {
 
         self.nodes += 1;
 
-        let inserted;
         let zobrist_hash = board.hash();
         if !self.repetition_table.contains(&zobrist_hash) {
-            inserted = true;
             self.repetition_table.insert(zobrist_hash);
         } else {
             return 0;
@@ -277,7 +278,7 @@ impl<'a> Search<'a> {
         let mut max = i32::MIN;
         let mut best_move = None;
 
-        let entry = self.transposition_table.get(board.hash());
+        let entry = self.transposition_table.get(zobrist_hash);
 
         if let Some(entry) = entry {
             if entry.depth >= depth {
@@ -318,17 +319,13 @@ impl<'a> Search<'a> {
                         (score, Bound::Lower, mv),
                         depth,
                     );
-                    if inserted {
-                        let _ = self.repetition_table.remove(&zobrist_hash);
-                    }
+                    let _ = self.repetition_table.remove(&zobrist_hash);
                     return beta;
                 }
             }
         }
 
-        if inserted {
-            let _ = self.repetition_table.remove(&zobrist_hash);
-        }
+        let _ = self.repetition_table.remove(&zobrist_hash);
 
         if !legal_moves {
             if board.in_check() {
@@ -341,19 +338,19 @@ impl<'a> Search<'a> {
         if let Some(best_move) = best_move {
             if alpha >= beta && alpha <= original_alpha {
                 self.transposition_table.store(
-                    board.hash(),
+                    zobrist_hash,
                     (alpha, Bound::Exact, best_move),
                     depth,
                 );
             } else if alpha <= original_alpha {
                 self.transposition_table.store(
-                    board.hash(),
+                    zobrist_hash,
                     (alpha, Bound::Upper, best_move),
                     depth,
                 );
             } else if alpha >= beta {
                 self.transposition_table.store(
-                    board.hash(),
+                    zobrist_hash,
                     (beta, Bound::Lower, best_move),
                     depth,
                 );
@@ -384,7 +381,7 @@ impl<'a> Search<'a> {
                 let score = -self.search_captures(&board, -beta, -alpha);
 
                 if score >= beta {
-                    return score;
+                    return beta;
                 }
                 if score > alpha {
                     alpha = score;

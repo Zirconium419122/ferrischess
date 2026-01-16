@@ -18,7 +18,7 @@ pub struct Eval<'a> {
 impl Eval<'_> {
     pub const MATE_SCORE: i32 = 100_000_000;
 
-    pub fn new(board: &Board) -> Eval {
+    pub fn new(board: &Board) -> Eval<'_> {
         Eval { board }
     }
 
@@ -65,11 +65,16 @@ impl Eval<'_> {
             score -= penalty;
         }
 
+        let white_to_move = self.board.side_to_move == Color::White;
         if self.board.in_check() {
-            score -= 50;
+            if white_to_move {
+                score -= 50;
+            } else {
+                score += 50;
+            }
         }
 
-        let perspective = if self.board.side_to_move == Color::White {
+        let perspective = if white_to_move {
             1
         } else {
             -1
