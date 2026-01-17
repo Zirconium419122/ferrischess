@@ -74,11 +74,7 @@ impl Eval<'_> {
             }
         }
 
-        let perspective = if white_to_move {
-            1
-        } else {
-            -1
-        };
+        let perspective = if white_to_move { 1 } else { -1 };
         score * perspective
     }
 

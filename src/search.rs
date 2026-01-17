@@ -31,6 +31,16 @@ pub enum TimeManagement {
     TimeLeft,
 }
 
+impl TimeManagement {
+    pub fn new(move_time: Option<usize>, time: Option<usize>) -> TimeManagement {
+        match (move_time, time) {
+            (Some(_), _) => TimeManagement::MoveTime,
+            (None, Some(_)) => TimeManagement::TimeLeft,
+            _ => TimeManagement::None,
+        }
+    }
+}
+
 pub struct Search<'a> {
     board: &'a Board,
     search_depth: u8,
@@ -71,13 +81,14 @@ impl<'a> Search<'a> {
 
     pub fn new(
         board: &'a Board,
-        depth: u8,
+        depth: Option<u8>,
+        time_management: TimeManagement,
         repetition_table: HashSet<u64>,
         transposition_table: &'a mut TranspositionTable<(i32, Bound, ChessMove)>,
     ) -> Search<'a> {
         Search {
             board,
-            search_depth: depth,
+            search_depth: depth.unwrap_or(Search::MAX_PLY),
 
             repetition_table,
             transposition_table,
@@ -94,7 +105,7 @@ impl<'a> Search<'a> {
 
             time: 0,
             think_timer: Instant::now(),
-            time_management: TimeManagement::None,
+            time_management: time_management,
 
             cancelled: false,
         }
@@ -121,8 +132,8 @@ impl<'a> Search<'a> {
         };
 
         const WINDOWS: [i32; 3] = [
-            20,
-            400,
+            15,
+            350,
             INFINITY,
         ];
 

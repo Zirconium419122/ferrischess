@@ -120,17 +120,11 @@ impl Uci for Engine {
                     {
                         let mut search = Search::new(
                             &self.board,
-                            depth.unwrap_or(6) as u8,
+                            depth.map(|depth| depth as u8),
+                            TimeManagement::new(move_time, time),
                             repetition_table,
                             transposition_table,
                         );
-                        search.time_management = if move_time.is_some() {
-                            TimeManagement::MoveTime
-                        } else if time.is_some() {
-                            TimeManagement::TimeLeft
-                        } else {
-                            TimeManagement::None
-                        };
 
                         (score, best_move, pv) = search.start_search(
                             time.unwrap_or(move_time.unwrap_or(0)),
