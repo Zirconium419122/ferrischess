@@ -115,8 +115,7 @@ impl Uci for Engine {
                         (btime, binc)
                     };
 
-                    let (score, best_move, pv);
-                    let nodes;
+                    let search_info;
                     {
                         let mut search = Search::new(
                             &self.board,
@@ -126,51 +125,49 @@ impl Uci for Engine {
                             transposition_table,
                         );
 
-                        (score, best_move, pv) = search.start_search(
+                        search_info = search.start_search(
                             time.unwrap_or(move_time.unwrap_or(0)),
                             time_inc.unwrap_or(0),
                         );
-                        nodes = search.nodes;
                     }
-                    let pv = pv
+                    let pv = search_info.pv
+                        .unwrap()
                         .iter()
                         .map(|mv| mv.to_string())
                         .collect::<Vec<String>>()
                         .join(" ");
 
-                    if best_move != Search::NULL_MOVE {
-                        if Eval::mate_score(score) {
+                    let score = search_info.evaluation.unwrap() as i32;
+
+                    if search_info.best_move != Some(Search::NULL_MOVE) {
+                        let score = if Eval::mate_score(score) {
                             let moves_to_mate = Eval::MATE_SCORE - score.abs();
                             let mate_in_moves = (moves_to_mate / 2) + 1;
 
-                            let score = Score {
+                            Score {
                                 mate: Some(score.signum() as isize * mate_in_moves as isize),
                                 ..Default::default()
-                            };
-
-                            self.send_command(UciCommand::Info(Info {
-                                pv: Some(pv),
-                                score: Some(score),
-                                nodes: Some(nodes),
-                                ..Default::default()
-                            }));
+                            }
                         } else {
-                            let cp = score;
-
-                            let score = Score {
-                                cp: Some(cp as isize),
+                            Score {
+                                cp: Some(score as isize),
                                 ..Default::default()
-                            };
+                            }
+                        };
 
-                            self.send_command(UciCommand::Info(Info {
-                                pv: Some(pv),
-                                score: Some(score),
-                                nodes: Some(nodes),
-                                ..Default::default()
-                            }));
-                        }
+                        self.send_command(UciCommand::Info(Info {
+                            depth: search_info.depth,
+                            seldepth: search_info.seldepth,
+                            pv: Some(pv),
+                            score: Some(score),
+                            time: search_info.time,
+                            nodes: search_info.nodes,
+                            nps: search_info.nps,
+                            ..Default::default()
+                        }));
+
                         self.send_command(UciCommand::BestMove {
-                            best_move: best_move.to_string(),
+                            best_move: search_info.best_move.unwrap().to_string(),
                             ponder: None,
                         });
                     }
