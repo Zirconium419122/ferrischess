@@ -227,7 +227,7 @@ impl<'a> Search<'a> {
         self.cancelled
     }
 
-    pub fn search_base(&mut self, alpha: i32, beta: i32) -> (i32, ChessMove) {
+    pub fn search_base(&mut self, mut alpha: i32, beta: i32) -> (i32, ChessMove) {
         let mut legal_moves = false;
         let mut max = i32::MIN;
         let mut best_move = Search::NULL_MOVE;
@@ -251,7 +251,7 @@ impl<'a> Search<'a> {
                 let mut base_pv = Vec::new();
 
                 legal_moves = true;
-                let score = -self.search(&board, alpha, beta, self.search_depth - 1, &mut base_pv);
+                let score = -self.search(&board, -beta, -alpha, self.search_depth - 1, &mut base_pv);
 
                 if self.should_cancel_search() {
                     if inserted {
@@ -264,9 +264,13 @@ impl<'a> Search<'a> {
                     max = score;
                     best_move = mv;
 
-                    self.pv_iteration.clear();
-                    self.pv_iteration.push(mv);
-                    self.pv_iteration.append(&mut base_pv);
+                    if score > alpha {
+                        alpha = score;
+
+                        self.pv_iteration.clear();
+                        self.pv_iteration.push(mv);
+                        self.pv_iteration.append(&mut base_pv);
+                    }
                 }
             }
         }
@@ -379,16 +383,16 @@ impl<'a> Search<'a> {
         }
 
         if let Some(best_move) = best_move {
-            if alpha >= beta && alpha <= original_alpha {
-                self.transposition_table.store(
-                    zobrist_hash,
-                    (max, Bound::Exact, best_move),
-                    depth,
-                );
-            } else if alpha <= original_alpha {
+            if alpha <= original_alpha {
                 self.transposition_table.store(
                     zobrist_hash,
                     (max, Bound::Upper, best_move),
+                    depth,
+                );
+            } else if alpha >= beta {
+                self.transposition_table.store(
+                    zobrist_hash,
+                    (max, Bound::Exact, best_move),
                     depth,
                 );
             }
