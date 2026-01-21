@@ -118,7 +118,7 @@ impl<'a> Search<'a> {
 
             time: 0,
             think_timer: Instant::now(),
-            time_management: time_management,
+            time_management,
 
             cancelled: false,
         }
@@ -214,8 +214,6 @@ impl<'a> Search<'a> {
             best_move: Some(self.best_move),
             pv: Some(self.pv.clone()),
         }
-
-        // (self.evaluation, self.best_move, self.pv.clone())
     }
 
     pub fn should_cancel_search(&mut self) -> bool {
@@ -245,13 +243,13 @@ impl<'a> Search<'a> {
             .map(|entry| entry.value.2);
 
         let mut moves = self.board.generate_moves_vec(!EMPTY);
-        Self::sort_moves(self.board, &mut moves, first_move);
+        self.sort_moves(self.board, &mut moves, first_move, 1);
         for mv in moves {
             if let Ok(board) = self.board.make_move_new(&mv) {
                 let mut base_pv = Vec::new();
 
                 legal_moves = true;
-                let score = -self.search(&board, -beta, -alpha, self.search_depth - 1, &mut base_pv);
+                let score = -self.search(&board, -beta, -alpha, self.search_depth - 1, 1, &mut base_pv);
 
                 if self.should_cancel_search() {
                     if inserted {
@@ -296,6 +294,7 @@ impl<'a> Search<'a> {
         mut alpha: i32,
         beta: i32,
         mut depth: u8,
+        ply: u8,
         pv: &mut Vec<ChessMove>,
     ) -> i32 {
         if self.should_cancel_search() {
@@ -307,7 +306,7 @@ impl<'a> Search<'a> {
         }
 
         if depth == 0 {
-            return self.search_captures(board, alpha, beta);
+            return self.search_captures(board, alpha, beta, ply);
         }
 
         self.nodes += 1;
@@ -329,7 +328,7 @@ impl<'a> Search<'a> {
         if let Some(entry) = entry {
             if entry.depth >= depth {
                 let corrected_score =
-                    Self::correct_mate_score(entry.value.0, self.search_depth - depth);
+                    Self::correct_mate_score(entry.value.0, ply);
                 match entry.value.1 {
                     Bound::Exact => return corrected_score,
                     // Bound::Lower if corrected_score >= beta => return corrected_score,
@@ -340,13 +339,13 @@ impl<'a> Search<'a> {
         }
 
         let mut moves = board.generate_moves_vec(!EMPTY);
-        Self::sort_moves(board, &mut moves, entry.map(|entry| entry.value.2));
+        self.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), ply);
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
                 let mut node_pv = Vec::with_capacity(8);
 
                 legal_moves = true;
-                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1), &mut node_pv);
+                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1), ply + 1, &mut node_pv);
 
                 if score > max {
                     max = score;
@@ -401,7 +400,7 @@ impl<'a> Search<'a> {
         max
     }
 
-    fn search_captures(&mut self, board: &Board, mut alpha: i32, beta: i32) -> i32 {
+    fn search_captures(&mut self, board: &Board, mut alpha: i32, beta: i32, ply: u8) -> i32 {
         const EVAL_MARGIN: i32 = 25;
 
         let eval = Eval::new(board).eval();
@@ -416,10 +415,10 @@ impl<'a> Search<'a> {
         self.nodes += 1;
 
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
-        Self::sort_moves(board, &mut moves, None);
+        self.sort_moves(board, &mut moves, None, ply);
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
-                let score = -self.search_captures(&board, -beta, -alpha);
+                let score = -self.search_captures(&board, -beta, -alpha, ply + 1);
 
                 if score >= beta {
                     return beta;
@@ -434,20 +433,26 @@ impl<'a> Search<'a> {
     }
 
     fn sort_moves(
+        &self,
         board: &Board,
         moves: &mut [ChessMove],
         tt_move: Option<ChessMove>,
+        ply: u8
     ) {
         let pawn_attack_mask = Self::pawn_attack_mask(board, !board.side_to_move);
 
         moves.sort_by(|a, b| {
-            let score_a = Self::score_move(board, pawn_attack_mask, a, tt_move);
-            let score_b = Self::score_move(board, pawn_attack_mask, b, tt_move);
+            let score_a = self.score_move(board, pawn_attack_mask, a, tt_move, ply);
+            let score_b = self.score_move(board, pawn_attack_mask, b, tt_move, ply);
             score_b.cmp(&score_a)
         });
     }
 
-    fn score_move(board: &Board, pawn_attack_mask: BitBoard, mv: &ChessMove, tt_move: Option<ChessMove>) -> i32 {
+    fn score_move(&self, board: &Board, pawn_attack_mask: BitBoard, mv: &ChessMove, tt_move: Option<ChessMove>, ply: u8) -> i32 {
+        if Some(mv) == self.pv.get(ply as usize - 1) {
+            return 2000;
+        }
+
         if Some(*mv) == tt_move {
             return 1000;
         }
