@@ -375,7 +375,7 @@ impl<'a> Search<'a> {
 
         if !legal_moves {
             if board.in_check() {
-                return -Eval::MATE_SCORE + self.search_depth as i32 - depth as i32;
+                return -Eval::MATE_SCORE + ply as i32;
             } else {
                 return 0;
             }
@@ -401,11 +401,8 @@ impl<'a> Search<'a> {
     }
 
     fn search_captures(&mut self, board: &Board, mut alpha: i32, beta: i32, ply: u8) -> i32 {
-        const EVAL_MARGIN: i32 = 25;
-
         let eval = Eval::new(board).eval();
-        if eval + EVAL_MARGIN >= beta {
-            self.nodes += 1;
+        if eval >= beta {
             return eval;
         }
         if eval > alpha {
