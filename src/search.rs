@@ -418,7 +418,7 @@ impl<'a> Search<'a> {
                 let score = -self.search_captures(&board, -beta, -alpha, ply + 1);
 
                 if score >= beta {
-                    return beta;
+                    return score;
                 }
                 if score > alpha {
                     alpha = score;
@@ -436,16 +436,14 @@ impl<'a> Search<'a> {
         tt_move: Option<ChessMove>,
         ply: u8
     ) {
-        let pawn_attack_mask = Self::pawn_attack_mask(board, !board.side_to_move);
-
         moves.sort_by(|a, b| {
-            let score_a = self.score_move(board, pawn_attack_mask, a, tt_move, ply);
-            let score_b = self.score_move(board, pawn_attack_mask, b, tt_move, ply);
+            let score_a = self.score_move(board, a, tt_move, ply);
+            let score_b = self.score_move(board, b, tt_move, ply);
             score_b.cmp(&score_a)
         });
     }
 
-    fn score_move(&self, board: &Board, pawn_attack_mask: BitBoard, mv: &ChessMove, tt_move: Option<ChessMove>, ply: u8) -> i32 {
+    fn score_move(&self, board: &Board, mv: &ChessMove, tt_move: Option<ChessMove>, ply: u8) -> i32 {
         if Some(mv) == self.pv.get(ply as usize - 1) {
             return 2000;
         }
@@ -456,10 +454,6 @@ impl<'a> Search<'a> {
 
         let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
         let mut score = 0;
-
-        if pawn_attack_mask & BitBoard::from_square(mv.to) != EMPTY {
-            score -= 20;
-        }
 
         if let Some(captured) = board.get_piece(mv.to) {
             score += Self::get_mvv_lva(captured, moved) as i32;
