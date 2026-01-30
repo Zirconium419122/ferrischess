@@ -252,10 +252,12 @@ impl<'a> Search<'a> {
                 let score = -self.search(&board, -beta, -alpha, self.search_depth - 1, 1, &mut base_pv);
 
                 if self.should_cancel_search() {
-                    if inserted {
+                    if best_move != Search::NULL_MOVE {
+                        break;
+                    } else {
                         let _ = self.repetition_table.remove(&zobrist_hash);
+                        return (0, Search::NULL_MOVE);
                     }
-                    return (0, Search::NULL_MOVE);
                 }
 
                 if score > max {
