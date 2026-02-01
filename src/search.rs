@@ -57,6 +57,7 @@ pub struct Search<'a> {
     pv_iteration: Vec<ChessMove>,
 
     pub nodes: usize,
+    pub seldepth: u8,
 
     time: usize,
     think_timer: Instant,
@@ -115,6 +116,7 @@ impl<'a> Search<'a> {
             pv_iteration: Vec::new(),
 
             nodes: 0,
+            seldepth: 0,
 
             time: 0,
             think_timer: Instant::now(),
@@ -206,7 +208,7 @@ impl<'a> Search<'a> {
 
         SearchInfo {
             depth: Some(depth_searched as usize),
-            seldepth: None,
+            seldepth: Some(self.seldepth as usize),
             time: Some(elapsed),
             nodes: Some(nodes),
             nps: Some((nodes as f32 * 1000.0 / elapsed as f32).round() as usize),
@@ -410,6 +412,8 @@ impl<'a> Search<'a> {
         if eval > alpha {
             alpha = eval;
         }
+
+        self.seldepth = self.seldepth.max(ply);
 
         self.nodes += 1;
 

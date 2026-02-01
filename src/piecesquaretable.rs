@@ -118,7 +118,7 @@ impl PieceSquareTable {
             let pawn_end = unsafe {
                 Self::PAWN_END.get_unchecked(square.to_index())
             };
-            let interpolated = ((*pawn_start as f32 * (1.0 - game_phase)) + (*pawn_end as f32 * game_phase)).trunc() as i8;
+            let interpolated = ((*pawn_start as f32 * (1.0 - game_phase)) + (*pawn_end as f32 * game_phase)) as i8;
 
             return interpolated;
         } else if piece == Piece::King {
@@ -128,7 +128,7 @@ impl PieceSquareTable {
             let king_end = unsafe {
                 Self::KING_END.get_unchecked(square.to_index())
             };
-            let interpolated = ((*king_start as f32 * (1.0 - game_phase)) + (*king_end as f32 * game_phase)).trunc() as i8;
+            let interpolated = ((*king_start as f32 * (1.0 - game_phase)) + (*king_end as f32 * game_phase)) as i8;
 
             return interpolated;
         }
