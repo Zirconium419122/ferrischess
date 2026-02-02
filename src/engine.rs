@@ -130,7 +130,8 @@ impl Uci for Engine {
                             time_inc.unwrap_or(0),
                         );
                     }
-                    let pv = search_info.pv
+                    let pv = search_info
+                        .pv
                         .unwrap()
                         .iter()
                         .map(|mv| mv.to_string())

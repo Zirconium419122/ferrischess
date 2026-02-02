@@ -442,30 +442,35 @@ impl<'a> Search<'a> {
         tt_move: Option<ChessMove>,
         ply: u8
     ) {
-        moves.sort_by(|a, b| {
-            let score_a = self.score_move(board, a, tt_move, ply);
-            let score_b = self.score_move(board, b, tt_move, ply);
-            score_b.cmp(&score_a)
-        });
+        let pv_move = self.pv.get(ply as usize - 1).copied();
+
+        let mut scored: Vec<(i32, ChessMove)> = moves.iter()
+            .map(|&mv| (self.score_move(board, mv, tt_move, pv_move), mv))
+            .collect();
+
+        scored.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+
+        for (i, (_, mv)) in scored.into_iter().enumerate() {
+            moves[i] = mv;
+        }
     }
 
-    fn score_move(&self, board: &Board, mv: &ChessMove, tt_move: Option<ChessMove>, ply: u8) -> i32 {
-        if Some(mv) == self.pv.get(ply as usize - 1) {
+    fn score_move(&self, board: &Board, mv: ChessMove, tt_move: Option<ChessMove>, pv_move: Option<ChessMove>) -> i32 {
+        if Some(mv) == pv_move {
             return 2000;
         }
 
-        if Some(*mv) == tt_move {
+        if Some(mv) == tt_move {
             return 1000;
         }
 
-        let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
-        let mut score = 0;
-
         if let Some(captured) = board.get_piece(mv.to) {
-            score += Self::get_mvv_lva(captured, moved) as i32;
+            let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
+
+            return Self::get_mvv_lva(captured, moved) as i32;
         }
 
-        score
+        0
     }
 
     fn get_mvv_lva(victim: Piece, attacker: Piece) -> i8 {
