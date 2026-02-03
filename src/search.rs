@@ -27,16 +27,42 @@ pub enum Bound {
 pub enum TimeManagement {
     #[default]
     None,
-    MoveTime,
-    TimeLeft,
+    MoveTime { time: usize },
+    TimeLeft { time: usize },
 }
 
 impl TimeManagement {
-    pub fn new(move_time: Option<usize>, time: Option<usize>) -> TimeManagement {
-        match (move_time, time) {
-            (Some(_), _) => TimeManagement::MoveTime,
-            (None, Some(_)) => TimeManagement::TimeLeft,
-            _ => TimeManagement::None,
+    pub fn new(
+        move_time: Option<usize>,
+        time: Option<usize>,
+        time_inc: Option<usize>,
+    ) -> TimeManagement {
+        if let Some(move_time) = move_time {
+            TimeManagement::MoveTime {
+                time: move_time.max(5),
+            }
+        } else if let Some(time) = time {
+            TimeManagement::TimeLeft {
+                time: (time / 20 + time_inc.unwrap_or(0) / 2).max(5),
+            }
+        } else {
+            TimeManagement::None
+        }
+    }
+
+    pub fn should_cancel_search(&self, search: &mut Search) -> bool {
+        if search.think_timer.elapsed().as_millis() as usize >= self.time()
+            && *self != TimeManagement::None
+        {
+            search.cancelled = true;
+        }
+        search.cancelled
+    }
+
+    pub fn time(&self) -> usize {
+        match self {
+            TimeManagement::MoveTime { time } | TimeManagement::TimeLeft { time } => *time,
+            _ => 0,
         }
     }
 }
@@ -59,7 +85,6 @@ pub struct Search<'a> {
     pub nodes: usize,
     pub seldepth: u8,
 
-    time: usize,
     think_timer: Instant,
     pub time_management: TimeManagement,
 
@@ -118,7 +143,6 @@ impl<'a> Search<'a> {
             nodes: 0,
             seldepth: 0,
 
-            time: 0,
             think_timer: Instant::now(),
             time_management,
 
@@ -126,11 +150,7 @@ impl<'a> Search<'a> {
         }
     }
 
-    pub fn start_search(
-        &mut self,
-        time: usize,
-        time_inc: usize,
-    ) -> SearchInfo {
+    pub fn start_search(&mut self) -> SearchInfo {
         let search_depth = if self.time_management != TimeManagement::None {
             Search::MAX_PLY
         } else {
@@ -140,16 +160,10 @@ impl<'a> Search<'a> {
         self.cancelled = false;
         self.best_move = Search::NULL_MOVE;
 
-        self.time = if self.time_management == TimeManagement::TimeLeft {
-            (time / 20 + time_inc / 2).max(5)
-        } else {
-            time.max(5)
-        };
-
         const WINDOWS: [i32; 3] = [
             15,
             350,
-            INFINITY,
+            INFINITY
         ];
 
         let mut evaluation = 0;
@@ -219,12 +233,8 @@ impl<'a> Search<'a> {
     }
 
     pub fn should_cancel_search(&mut self) -> bool {
-        if self.think_timer.elapsed().as_millis() as usize >= self.time
-            && self.time_management != TimeManagement::None
-        {
-            self.cancelled = true;
-        }
-        self.cancelled
+        let time_management = self.time_management;
+        time_management.should_cancel_search(self)
     }
 
     pub fn search_base(&mut self, mut alpha: i32, beta: i32) -> (i32, ChessMove) {
@@ -331,8 +341,7 @@ impl<'a> Search<'a> {
 
         if let Some(entry) = entry {
             if entry.depth >= depth {
-                let corrected_score =
-                    Self::correct_mate_score(entry.value.0, ply);
+                let corrected_score = Self::correct_mate_score(entry.value.0, ply);
                 match entry.value.1 {
                     Bound::Exact => return corrected_score,
                     // Bound::Lower if corrected_score >= beta => return corrected_score,
@@ -440,11 +449,12 @@ impl<'a> Search<'a> {
         board: &Board,
         moves: &mut [ChessMove],
         tt_move: Option<ChessMove>,
-        ply: u8
+        ply: u8,
     ) {
         let pv_move = self.pv.get(ply as usize - 1).copied();
 
-        let mut scored: Vec<(i32, ChessMove)> = moves.iter()
+        let mut scored: Vec<(i32, ChessMove)> = moves
+            .iter()
             .map(|&mv| (self.score_move(board, mv, tt_move, pv_move), mv))
             .collect();
 
@@ -455,7 +465,13 @@ impl<'a> Search<'a> {
         }
     }
 
-    fn score_move(&self, board: &Board, mv: ChessMove, tt_move: Option<ChessMove>, pv_move: Option<ChessMove>) -> i32 {
+    fn score_move(
+        &self,
+        board: &Board,
+        mv: ChessMove,
+        tt_move: Option<ChessMove>,
+        pv_move: Option<ChessMove>,
+    ) -> i32 {
         if Some(mv) == pv_move {
             return 2000;
         }

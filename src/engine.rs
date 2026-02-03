@@ -120,15 +120,12 @@ impl Uci for Engine {
                         let mut search = Search::new(
                             &self.board,
                             depth.map(|depth| depth as u8),
-                            TimeManagement::new(move_time, time),
+                            TimeManagement::new(move_time, time, time_inc),
                             repetition_table,
                             transposition_table,
                         );
 
-                        search_info = search.start_search(
-                            time.unwrap_or(move_time.unwrap_or(0)),
-                            time_inc.unwrap_or(0),
-                        );
+                        search_info = search.start_search();
                     }
                     let pv = search_info
                         .pv
