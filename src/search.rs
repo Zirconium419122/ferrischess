@@ -176,7 +176,7 @@ impl<'a> Search<'a> {
 
             let mut tries = 1;
 
-            let (mut alpha, mut beta) = if depth > 6 {
+            let (mut alpha, mut beta) = if depth >= 6 {
                 (evaluation - WINDOWS[0], evaluation + WINDOWS[0])
             } else {
                 (-INFINITY, INFINITY)

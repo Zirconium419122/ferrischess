@@ -1,7 +1,10 @@
 [package]
 name = "ferrischess"
 version = "0.5.0"
-edition = "2021"
+edition = "2024"
+repository = "https://github.com/Zirconium419122/ferrischess"
+license = "GPL-3.0"
+publish = false
 
 [dependencies]
 chessframe = { git = "https://github.com/Zirconium419122/chessframe.git" }
