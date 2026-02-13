@@ -9,7 +9,7 @@ use chessframe::{
     transpositiontable::TranspositionTable,
 };
 
-use crate::eval::Eval;
+use crate::{eval::Eval, move_sorter::MoveSorter};
 
 // Let's just use 1 billion instead of i32::MAX since I'm scared of overflow and underflow.
 pub const INFINITY: i32 = 1_000_000_000;
@@ -73,6 +73,7 @@ pub struct Search<'a> {
 
     repetition_table: HashSet<u64>,
     transposition_table: &'a mut TranspositionTable<(i32, Bound, ChessMove)>,
+    move_sorter: &'a mut MoveSorter,
 
     evaluation: i32,
     best_move: ChessMove,
@@ -109,21 +110,13 @@ impl<'a> Search<'a> {
 
     pub const MAX_PLY: u8 = 255;
 
-    const MVV_LVA: [[i8; 6]; 6] = [
-        [15, 14, 13, 12, 11, 10], // victim Pawn, attacker P, N, B, R, Q, K
-        [25, 24, 23, 22, 21, 20], // victim Knight, attacker P, N, B, R, Q, K
-        [35, 34, 33, 32, 31, 30], // victim Bishop, attacker P, N, B, R, Q, K
-        [45, 44, 43, 42, 41, 40], // victim Rook, attacker P, N, B, R, Q, K
-        [55, 54, 53, 52, 51, 50], // victim Queen, attacker P, N, B, R, Q, K
-        [0, 0, 0, 0, 0, 0],       // victim King, attacker P, N, B, R, Q, K
-    ];
-
     pub fn new(
         board: &'a Board,
         depth: Option<u8>,
         time_management: TimeManagement,
         repetition_table: HashSet<u64>,
         transposition_table: &'a mut TranspositionTable<(i32, Bound, ChessMove)>,
+        move_sorter: &'a mut MoveSorter,
     ) -> Search<'a> {
         Search {
             board,
@@ -131,6 +124,7 @@ impl<'a> Search<'a> {
 
             repetition_table,
             transposition_table,
+            move_sorter,
 
             evaluation: 1234567890,
             best_move: Search::NULL_MOVE,
@@ -255,7 +249,7 @@ impl<'a> Search<'a> {
             .map(|entry| entry.value.2);
 
         let mut moves = self.board.generate_moves_vec(!EMPTY);
-        self.sort_moves(self.board, &mut moves, first_move, 1);
+        self.move_sorter.sort_moves(self.board, &mut moves, first_move, self.pv.first().copied(), 1);
         for mv in moves {
             if let Ok(board) = self.board.make_move_new(&mv) {
                 let mut base_pv = Vec::new();
@@ -352,7 +346,7 @@ impl<'a> Search<'a> {
         }
 
         let mut moves = board.generate_moves_vec(!EMPTY);
-        self.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), ply);
+        self.move_sorter.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), self.pv.get(ply as usize - 1).copied(), ply);
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
                 let mut node_pv = Vec::with_capacity(8);
@@ -379,6 +373,9 @@ impl<'a> Search<'a> {
                         depth,
                     );
                     let _ = self.repetition_table.remove(&zobrist_hash);
+
+                    self.move_sorter.add_killer_move(mv, ply);
+
                     return beta;
                 }
             }
@@ -427,7 +424,7 @@ impl<'a> Search<'a> {
         self.nodes += 1;
 
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
-        self.sort_moves(board, &mut moves, None, ply);
+        self.move_sorter.sort_moves(board, &mut moves, None, self.pv.get(ply as usize - 1).copied(), ply);
         for mv in moves {
             if let Ok(board) = board.make_move_new(&mv) {
                 let score = -self.search_captures(&board, -beta, -alpha, ply + 1);
@@ -442,59 +439,6 @@ impl<'a> Search<'a> {
         }
 
         alpha
-    }
-
-    fn sort_moves(
-        &self,
-        board: &Board,
-        moves: &mut [ChessMove],
-        tt_move: Option<ChessMove>,
-        ply: u8,
-    ) {
-        let pv_move = self.pv.get(ply as usize - 1).copied();
-
-        let mut scored: Vec<(i32, ChessMove)> = moves
-            .iter()
-            .map(|&mv| (self.score_move(board, mv, tt_move, pv_move), mv))
-            .collect();
-
-        scored.sort_unstable_by(|a, b| b.0.cmp(&a.0));
-
-        for (i, (_, mv)) in scored.into_iter().enumerate() {
-            moves[i] = mv;
-        }
-    }
-
-    fn score_move(
-        &self,
-        board: &Board,
-        mv: ChessMove,
-        tt_move: Option<ChessMove>,
-        pv_move: Option<ChessMove>,
-    ) -> i32 {
-        if Some(mv) == pv_move {
-            return 2000;
-        }
-
-        if Some(mv) == tt_move {
-            return 1000;
-        }
-
-        if let Some(captured) = board.get_piece(mv.to) {
-            let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
-
-            return Self::get_mvv_lva(captured, moved) as i32;
-        }
-
-        0
-    }
-
-    fn get_mvv_lva(victim: Piece, attacker: Piece) -> i8 {
-        unsafe {
-            *Self::MVV_LVA
-                .get_unchecked(victim.to_index())
-                .get_unchecked(attacker.to_index())
-        }
     }
 
     fn pawn_attack_mask(board: &Board, color: Color) -> BitBoard {

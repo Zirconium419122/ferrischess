@@ -2,6 +2,7 @@ use engine::Engine;
 
 mod engine;
 mod eval;
+mod move_sorter;
 mod piecesquaretable;
 mod search;
 
