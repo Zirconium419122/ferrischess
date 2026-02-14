@@ -11,19 +11,25 @@ pub const MVV_LVA: [i8; 36] = [
      0,  0,  0,  0,  0,  0, // victim King, attacker P, N, B, R, Q, K
 ];
 
+const KILLER_MOVE_COUNT: usize = 12;
+
 pub struct MoveSorter {
-    pub killer_moves: [ChessMove; 16]
+    pub killer_moves: [ChessMove; KILLER_MOVE_COUNT]
 }
 
 impl MoveSorter {
     pub fn new() -> MoveSorter {
         MoveSorter {
-            killer_moves: [Search::NULL_MOVE; 16]
+            killer_moves: [Search::NULL_MOVE; KILLER_MOVE_COUNT]
         }
     }
 
+    pub fn clear(&mut self) {
+        self.killer_moves = [Search::NULL_MOVE; KILLER_MOVE_COUNT];
+    }
+
     pub fn add_killer_move(&mut self, mv: ChessMove, ply: u8) {
-        if ply < 16 {
+        if ply < KILLER_MOVE_COUNT as u8 {
             self.killer_moves[ply as usize] = mv
         }
     }
@@ -69,7 +75,7 @@ impl MoveSorter {
             let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
 
             return 1000 + Self::get_mvv_lva(captured, moved) as i32;
-        } else if ply < 16 && self.killer_moves[ply as usize] == mv {
+        } else if ply < KILLER_MOVE_COUNT as u8 && self.killer_moves[ply as usize] == mv {
             return 5000;
         }
 

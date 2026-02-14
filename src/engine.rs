@@ -73,7 +73,7 @@ impl Uci for Engine {
                 UciCommand::UciNewGame => {
                     self.board = Board::default();
                     self.repetition_table.clear();
-                    self.transposition_table.clear();
+                    self.move_sorter.clear();
                 }
                 UciCommand::Position { fen, moves } => {
                     if fen == "startpos" {

@@ -1,12 +1,7 @@
 use std::{collections::HashSet, time::Instant};
 
 use chessframe::{
-    bitboard::{BitBoard, EMPTY},
-    board::Board,
-    chess_move::ChessMove,
-    color::Color,
-    piece::Piece,
-    transpositiontable::TranspositionTable,
+    bitboard::{BitBoard, EMPTY}, board::Board, chess_move::ChessMove, color::Color, piece::Piece, square::Square, transpositiontable::TranspositionTable
 };
 
 use crate::{eval::Eval, move_sorter::MoveSorter};
@@ -106,7 +101,7 @@ pub struct SearchInfo {
 }
 
 impl<'a> Search<'a> {
-    pub const NULL_MOVE: ChessMove = unsafe { std::mem::transmute::<[u8; 3], ChessMove>([0; 3]) };
+    pub const NULL_MOVE: ChessMove = ChessMove { from: Square::A1, to: Square::A1, promotion: None };
 
     pub const MAX_PLY: u8 = 255;
 
