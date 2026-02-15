@@ -1,7 +1,7 @@
 use std::{collections::HashSet, time::Instant};
 
 use chessframe::{
-    bitboard::{BitBoard, EMPTY}, board::Board, chess_move::ChessMove, color::Color, piece::Piece, square::Square, transpositiontable::TranspositionTable
+    bitboard::EMPTY, board::Board, chess_move::ChessMove, square::Square, transpositiontable::TranspositionTable
 };
 
 use crate::{eval::Eval, move_sorter::MoveSorter};
@@ -296,16 +296,12 @@ impl<'a> Search<'a> {
         board: &Board,
         mut alpha: i32,
         beta: i32,
-        mut depth: u8,
+        depth: u8,
         ply: u8,
         pv: &mut Vec<ChessMove>,
     ) -> i32 {
         if self.should_cancel_search() {
             return 0;
-        }
-
-        if board.in_check() {
-            depth += 1;
         }
 
         if depth == 0 {
@@ -328,15 +324,13 @@ impl<'a> Search<'a> {
 
         let entry = self.transposition_table.get(zobrist_hash);
 
-        if let Some(entry) = entry {
-            if entry.depth >= depth {
-                let corrected_score = Self::correct_mate_score(entry.value.0, ply);
-                match entry.value.1 {
-                    Bound::Exact => return corrected_score,
-                    // Bound::Lower if corrected_score >= beta => return corrected_score,
-                    Bound::Upper if corrected_score <= alpha => return corrected_score,
-                    _ => {}
-                }
+        if let Some(entry) = entry && entry.depth >= depth {
+            let corrected_score = Self::correct_mate_score(entry.value.0, ply);
+            match entry.value.1 {
+                Bound::Exact => return corrected_score,
+                // Bound::Lower if corrected_score >= beta => return corrected_score,
+                Bound::Upper if corrected_score <= alpha => return corrected_score,
+                _ => {}
             }
         }
 
@@ -347,7 +341,7 @@ impl<'a> Search<'a> {
                 let mut node_pv = Vec::with_capacity(8);
 
                 legal_moves = true;
-                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1), ply + 1, &mut node_pv);
+                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1) + board.in_check() as u8, ply + 1, &mut node_pv);
 
                 if score > max {
                     max = score;
@@ -406,6 +400,9 @@ impl<'a> Search<'a> {
     }
 
     fn search_captures(&mut self, board: &Board, mut alpha: i32, beta: i32, ply: u8) -> i32 {
+        self.seldepth = self.seldepth.max(ply);
+        self.nodes += 1;
+
         let eval = Eval::new(board).eval();
         if eval >= beta {
             return eval;
@@ -413,10 +410,6 @@ impl<'a> Search<'a> {
         if eval > alpha {
             alpha = eval;
         }
-
-        self.seldepth = self.seldepth.max(ply);
-
-        self.nodes += 1;
 
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
         self.move_sorter.sort_moves(board, &mut moves, None, self.pv.get(ply as usize - 1).copied(), ply);
@@ -434,21 +427,6 @@ impl<'a> Search<'a> {
         }
 
         alpha
-    }
-
-    fn pawn_attack_mask(board: &Board, color: Color) -> BitBoard {
-        match color {
-            Color::White => {
-                ((board.pieces_color(Piece::Pawn, color) << 7) & !BitBoard(0x8080808080808080))
-                    | ((board.pieces_color(Piece::Pawn, color) << 9)
-                        & !BitBoard(0x1010101010101010))
-            }
-            Color::Black => {
-                ((board.pieces_color(Piece::Pawn, color) >> 7) & !BitBoard(0x1010101010101010))
-                    | ((board.pieces_color(Piece::Pawn, color) >> 9)
-                        & !BitBoard(0x8080808080808080))
-            }
-        }
     }
 
     fn correct_mate_score(score: i32, ply: u8) -> i32 {
