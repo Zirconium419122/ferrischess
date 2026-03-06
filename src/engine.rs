@@ -11,10 +11,10 @@ use crate::{
 
 pub struct Engine {
     board: Board,
-    quitting: bool,
     repetition_table: Vec<u64>,
     transposition_table: TranspositionTable<(i32, Bound, ChessMove)>,
     move_sorter: MoveSorter,
+    quitting: bool,
 }
 
 impl Uci for Engine {
@@ -92,7 +92,7 @@ impl Uci for Engine {
 
                             let mv = board.infer_move(&mv).unwrap();
 
-                            let _ = board.make_move(&mv);
+                            let _ = board.make_move(mv);
                         }
                     }
                 }
@@ -185,10 +185,10 @@ impl Engine {
     pub fn new() -> Engine {
         Engine {
             board: Board::default(),
-            quitting: false,
             repetition_table: Vec::new(),
             transposition_table: TranspositionTable::with_size_mb(Engine::TRANSPOSITIONTABLE_SIZE),
             move_sorter: MoveSorter::new(),
+            quitting: false,
         }
     }
 

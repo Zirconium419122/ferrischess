@@ -234,8 +234,7 @@ impl<'a> Search<'a> {
         let mut inserted = false;
         let zobrist_hash = self.board.hash();
         if !self.repetition_table.contains(&zobrist_hash) {
-            inserted = true;
-            self.repetition_table.insert(zobrist_hash);
+            inserted = self.repetition_table.insert(zobrist_hash);
         }
 
         let first_move = self
@@ -246,7 +245,7 @@ impl<'a> Search<'a> {
         let mut moves = self.board.generate_moves_vec(!EMPTY);
         self.move_sorter.sort_moves(self.board, &mut moves, first_move, self.pv.first().copied(), 1);
         for mv in moves {
-            if let Ok(board) = self.board.make_move_new(&mv) {
+            if let Ok(board) = self.board.make_move_new(mv) {
                 let mut base_pv = Vec::new();
 
                 legal_moves = true;
@@ -296,12 +295,13 @@ impl<'a> Search<'a> {
         board: &Board,
         mut alpha: i32,
         beta: i32,
-        depth: u8,
+        mut depth: u8,
         ply: u8,
         pv: &mut Vec<ChessMove>,
     ) -> i32 {
-        if self.should_cancel_search() {
-            return 0;
+        let in_check = board.in_check();
+        if in_check {
+            depth += 1;
         }
 
         if depth == 0 {
@@ -311,8 +311,10 @@ impl<'a> Search<'a> {
         self.nodes += 1;
 
         let zobrist_hash = board.hash();
+
+        let inserted;
         if !self.repetition_table.contains(&zobrist_hash) {
-            self.repetition_table.insert(zobrist_hash);
+            inserted = self.repetition_table.insert(zobrist_hash);
         } else {
             return 0;
         }
@@ -326,10 +328,17 @@ impl<'a> Search<'a> {
 
         if let Some(entry) = entry && entry.depth >= depth {
             let corrected_score = Self::correct_mate_score(entry.value.0, ply);
+
             match entry.value.1 {
-                Bound::Exact => return corrected_score,
+                Bound::Exact => {
+                    if inserted { self.repetition_table.remove(&zobrist_hash); }
+                    return corrected_score;
+                }
                 // Bound::Lower if corrected_score >= beta => return corrected_score,
-                Bound::Upper if corrected_score <= alpha => return corrected_score,
+                Bound::Upper if corrected_score <= alpha => {
+                    if inserted { self.repetition_table.remove(&zobrist_hash); }
+                    return corrected_score;
+                }
                 _ => {}
             }
         }
@@ -337,11 +346,11 @@ impl<'a> Search<'a> {
         let mut moves = board.generate_moves_vec(!EMPTY);
         self.move_sorter.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), self.pv.get(ply as usize - 1).copied(), ply);
         for mv in moves {
-            if let Ok(board) = board.make_move_new(&mv) {
+            if let Ok(board) = board.make_move_new(mv) {
                 let mut node_pv = Vec::with_capacity(8);
 
                 legal_moves = true;
-                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1) + board.in_check() as u8, ply + 1, &mut node_pv);
+                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1), ply + 1, &mut node_pv);
 
                 if score > max {
                     max = score;
@@ -361,19 +370,25 @@ impl<'a> Search<'a> {
                         (score, Bound::Lower, mv),
                         depth,
                     );
-                    let _ = self.repetition_table.remove(&zobrist_hash);
+                    if inserted { self.repetition_table.remove(&zobrist_hash); }
 
                     self.move_sorter.add_killer_move(mv, ply);
 
                     return beta;
                 }
+
+                if self.should_cancel_search() {
+                    if inserted { self.repetition_table.remove(&zobrist_hash); }
+
+                    return max;
+                }
             }
         }
 
-        let _ = self.repetition_table.remove(&zobrist_hash);
+        if inserted { self.repetition_table.remove(&zobrist_hash); }
 
         if !legal_moves {
-            if board.in_check() {
+            if in_check {
                 return -Eval::MATE_SCORE + ply as i32;
             } else {
                 return 0;
@@ -414,7 +429,7 @@ impl<'a> Search<'a> {
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
         self.move_sorter.sort_moves(board, &mut moves, None, self.pv.get(ply as usize - 1).copied(), ply);
         for mv in moves {
-            if let Ok(board) = board.make_move_new(&mv) {
+            if let Ok(board) = board.make_move_new(mv) {
                 let score = -self.search_captures(&board, -beta, -alpha, ply + 1);
 
                 if score >= beta {
