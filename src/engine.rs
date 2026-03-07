@@ -6,7 +6,9 @@ use chessframe::{
 };
 
 use crate::{
-    eval::Eval, move_sorter::MoveSorter, search::{Bound, Search, TimeManagement}
+    eval::Eval,
+    move_sorter::MoveSorter,
+    search::{Bound, Search, TimeManagement},
 };
 
 pub struct Engine {
@@ -123,7 +125,7 @@ impl Uci for Engine {
                             TimeManagement::new(move_time, time, time_inc),
                             repetition_table,
                             transposition_table,
-                            &mut self.move_sorter
+                            &mut self.move_sorter,
                         );
 
                         search_info = search.start_search();

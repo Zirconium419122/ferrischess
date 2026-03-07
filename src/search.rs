@@ -1,7 +1,8 @@
 use std::{collections::HashSet, time::Instant};
 
 use chessframe::{
-    bitboard::EMPTY, board::Board, chess_move::ChessMove, square::Square, transpositiontable::TranspositionTable
+    bitboard::EMPTY, board::Board, chess_move::ChessMove, square::Square,
+    transpositiontable::TranspositionTable,
 };
 
 use crate::{eval::Eval, move_sorter::MoveSorter};
@@ -163,10 +164,10 @@ impl<'a> Search<'a> {
         for depth in 1..=search_depth {
             self.search_depth = depth;
 
-            let mut tries = 1;
+            let mut tries = 0;
 
             let (mut alpha, mut beta) = if depth >= 6 {
-                (evaluation - WINDOWS[0], evaluation + WINDOWS[0])
+                (evaluation - WINDOWS[tries], evaluation + WINDOWS[tries])
             } else {
                 (-INFINITY, INFINITY)
             };
@@ -178,14 +179,14 @@ impl<'a> Search<'a> {
                 evaluation = self.evaluation_iteration;
 
                 if evaluation <= alpha && tries < WINDOWS.len() - 1 {
-                    alpha = evaluation.saturating_sub(WINDOWS[tries]);
                     tries += 1;
+                    alpha = evaluation.saturating_sub(WINDOWS[tries]);
 
                     continue;
                 }
                 if evaluation >= beta && tries < WINDOWS.len() - 1 {
-                    beta = evaluation.saturating_add(WINDOWS[tries]);
                     tries += 1;
+                    beta = evaluation.saturating_add(WINDOWS[tries]);
 
                     continue;
                 }
@@ -276,7 +277,7 @@ impl<'a> Search<'a> {
         }
 
         if inserted {
-            let _ = self.repetition_table.remove(&zobrist_hash);
+            self.repetition_table.remove(&zobrist_hash);
         }
 
         if !legal_moves {
@@ -295,15 +296,10 @@ impl<'a> Search<'a> {
         board: &Board,
         mut alpha: i32,
         beta: i32,
-        mut depth: u8,
+        depth: u8,
         ply: u8,
         pv: &mut Vec<ChessMove>,
     ) -> i32 {
-        let in_check = board.in_check();
-        if in_check {
-            depth += 1;
-        }
-
         if depth == 0 {
             return self.search_captures(board, alpha, beta, ply);
         }
@@ -312,12 +308,11 @@ impl<'a> Search<'a> {
 
         let zobrist_hash = board.hash();
 
-        let inserted;
-        if !self.repetition_table.contains(&zobrist_hash) {
-            inserted = self.repetition_table.insert(zobrist_hash);
+        let inserted = if !self.repetition_table.contains(&zobrist_hash) {
+            self.repetition_table.insert(zobrist_hash)
         } else {
             return 0;
-        }
+        };
 
         let original_alpha = alpha;
         let mut legal_moves = false;
@@ -326,7 +321,9 @@ impl<'a> Search<'a> {
 
         let entry = self.transposition_table.get(zobrist_hash);
 
-        if let Some(entry) = entry && entry.depth >= depth {
+        if let Some(entry) = entry
+            && entry.depth >= depth
+        {
             let corrected_score = Self::correct_mate_score(entry.value.0, ply);
 
             match entry.value.1 {
@@ -350,7 +347,7 @@ impl<'a> Search<'a> {
                 let mut node_pv = Vec::with_capacity(8);
 
                 legal_moves = true;
-                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1), ply + 1, &mut node_pv);
+                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1) + board.in_check() as u8, ply + 1, &mut node_pv);
 
                 if score > max {
                     max = score;
@@ -388,7 +385,7 @@ impl<'a> Search<'a> {
         if inserted { self.repetition_table.remove(&zobrist_hash); }
 
         if !legal_moves {
-            if in_check {
+            if board.in_check() {
                 return -Eval::MATE_SCORE + ply as i32;
             } else {
                 return 0;

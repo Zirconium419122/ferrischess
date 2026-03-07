@@ -1,9 +1,9 @@
 use chessframe::{
     bitboard::EMPTY,
     board::Board,
-    color::{Color, COLORS},
+    color::{COLORS, Color},
     file::File,
-    magic::{get_adjacent_files, FILES},
+    magic::{FILES, get_adjacent_files},
     piece::Piece,
 };
 
@@ -67,11 +67,7 @@ impl Eval<'_> {
 
         let white_to_move = self.board.side_to_move == Color::White;
         if self.board.in_check() {
-            if white_to_move {
-                score -= 50;
-            } else {
-                score += 50;
-            }
+            score -= 50;
         }
 
         let perspective = if white_to_move { 1 } else { -1 };

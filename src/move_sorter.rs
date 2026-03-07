@@ -14,13 +14,13 @@ pub const MVV_LVA: [i8; 36] = [
 const KILLER_MOVE_COUNT: usize = 12;
 
 pub struct MoveSorter {
-    pub killer_moves: [ChessMove; KILLER_MOVE_COUNT]
+    pub killer_moves: [ChessMove; KILLER_MOVE_COUNT],
 }
 
 impl MoveSorter {
     pub fn new() -> MoveSorter {
         MoveSorter {
-            killer_moves: [Search::NULL_MOVE; KILLER_MOVE_COUNT]
+            killer_moves: [Search::NULL_MOVE; KILLER_MOVE_COUNT],
         }
     }
 
