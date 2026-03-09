@@ -238,6 +238,8 @@ impl<'a> Search<'a> {
             inserted = self.repetition_table.insert(zobrist_hash);
         }
 
+        let original_alpha = alpha;
+
         let first_move = self
             .transposition_table
             .get(self.board.hash())
@@ -247,7 +249,7 @@ impl<'a> Search<'a> {
         self.move_sorter.sort_moves(self.board, &mut moves, first_move, self.pv.first().copied(), 1);
         for mv in moves {
             if let Ok(board) = self.board.make_move_new(mv) {
-                let mut base_pv = Vec::new();
+                let mut base_pv = [Search::NULL_MOVE; 16];
 
                 legal_moves = true;
                 let score = -self.search(&board, -beta, -alpha, self.search_depth - 1, 1, &mut base_pv);
@@ -270,7 +272,8 @@ impl<'a> Search<'a> {
 
                         self.pv_iteration.clear();
                         self.pv_iteration.push(mv);
-                        self.pv_iteration.append(&mut base_pv);
+                        self.pv_iteration.extend_from_slice(&base_pv);
+                        self.pv_iteration.retain(|mv| *mv != Search::NULL_MOVE);
                     }
                 }
             }
@@ -288,6 +291,26 @@ impl<'a> Search<'a> {
             }
         }
 
+        if max <= original_alpha {
+            self.transposition_table.store(
+                zobrist_hash,
+                (max, Bound::Upper, best_move),
+                self.search_depth,
+            );
+        } else if max >= beta {
+            self.transposition_table.store(
+                zobrist_hash,
+                (max, Bound::Lower, best_move),
+                self.search_depth,
+            );
+        } else {
+            self.transposition_table.store(
+                zobrist_hash,
+                (max, Bound::Exact, best_move),
+                self.search_depth,
+            );
+        }
+
         (max, best_move)
     }
 
@@ -298,7 +321,7 @@ impl<'a> Search<'a> {
         beta: i32,
         depth: u8,
         ply: u8,
-        pv: &mut Vec<ChessMove>,
+        pv: &mut [ChessMove],
     ) -> i32 {
         if depth == 0 {
             return self.search_captures(board, alpha, beta, ply);
@@ -344,7 +367,7 @@ impl<'a> Search<'a> {
         self.move_sorter.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), self.pv.get(ply as usize - 1).copied(), ply);
         for mv in moves {
             if let Ok(board) = board.make_move_new(mv) {
-                let mut node_pv = Vec::with_capacity(8);
+                let mut node_pv = [Search::NULL_MOVE; 16];
 
                 legal_moves = true;
                 let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1) + board.in_check() as u8, ply + 1, &mut node_pv);
@@ -356,9 +379,8 @@ impl<'a> Search<'a> {
                     if score > alpha {
                         alpha = score;
 
-                        pv.clear();
-                        pv.push(mv);
-                        pv.append(&mut node_pv);
+                        pv[0] = mv;
+                        pv[1..].copy_from_slice(&node_pv[..15]);
                     }
                 }
                 if score >= beta {
@@ -393,13 +415,19 @@ impl<'a> Search<'a> {
         }
 
         if let Some(best_move) = best_move {
-            if alpha <= original_alpha {
+            if max <= original_alpha {
                 self.transposition_table.store(
                     zobrist_hash,
                     (max, Bound::Upper, best_move),
                     depth,
                 );
-            } else if alpha >= beta {
+            } else if max >= beta {
+                self.transposition_table.store(
+                    zobrist_hash,
+                    (max, Bound::Lower, best_move),
+                    depth,
+                );
+            } else {
                 self.transposition_table.store(
                     zobrist_hash,
                     (max, Bound::Exact, best_move),
