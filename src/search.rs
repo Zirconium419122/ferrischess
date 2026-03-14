@@ -342,7 +342,20 @@ impl<'a> Search<'a> {
         let mut max = i32::MIN;
         let mut best_move = None;
 
-        let entry = self.transposition_table.get(zobrist_hash);
+        let entry = self.transposition_table.get(zobrist_hash).copied();
+
+        if !board.in_check() && (board.occupancy(board.side_to_move) ^ board.pieces_color(Piece::Pawn, board.side_to_move)).count_ones() != 1 {
+            if let Ok(board) = board.make_null_move_new() {
+                let mut node_pv = [ChessMove::NULL_MOVE; 16];
+
+                let score = -self.search(&board, -beta, -(beta - 1), depth.saturating_sub(3), ply + 1, &mut node_pv);
+
+                if score >= beta {
+                    if inserted { self.repetition_table.remove(&zobrist_hash); }
+                    return score;
+                }
+            }
+        }
 
         if let Some(entry) = entry
             && entry.depth >= depth

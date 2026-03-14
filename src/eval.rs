@@ -22,7 +22,7 @@ impl Eval<'_> {
         Eval { board }
     }
 
-    pub fn piece_value(piece: &Piece) -> i32 {
+    pub fn piece_value(piece: Piece) -> i32 {
         unsafe { *PIECE_VALUES.get_unchecked(piece.to_index()) }
     }
 
@@ -33,13 +33,13 @@ impl Eval<'_> {
 
         for square in self.board.occupancy(Color::White) {
             let piece = unsafe { self.board.get_piece(square).unwrap_unchecked() };
-            score += Self::piece_value(&piece)
+            score += Self::piece_value(piece)
                 + PieceSquareTable::read(square, piece, Color::White, game_phase) as i32;
         }
 
         for square in self.board.occupancy(Color::Black) {
             let piece = unsafe { self.board.get_piece(square).unwrap_unchecked() };
-            score -= Self::piece_value(&piece)
+            score -= Self::piece_value(piece)
                 + PieceSquareTable::read(square, piece, Color::Black, game_phase) as i32;
         }
 
