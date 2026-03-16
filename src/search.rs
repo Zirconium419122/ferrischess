@@ -1,8 +1,7 @@
 use std::{collections::HashSet, time::Instant};
 
 use chessframe::{
-    bitboard::EMPTY, board::Board, chess_move::ChessMove, square::Square,
-    transpositiontable::TranspositionTable,
+    bitboard::EMPTY, board::Board, chess_move::ChessMove, piece::Piece, square::Square, transpositiontable::TranspositionTable
 };
 
 use crate::{eval::Eval, move_sorter::MoveSorter};
@@ -150,12 +149,6 @@ impl<'a> Search<'a> {
         self.cancelled = false;
         self.best_move = Search::NULL_MOVE;
 
-        const WINDOWS: [i32; 3] = [
-            15,
-            350,
-            INFINITY
-        ];
-
         let mut evaluation = 0;
 
         let mut depth_searched = 0;
@@ -164,10 +157,10 @@ impl<'a> Search<'a> {
         for depth in 1..=search_depth {
             self.search_depth = depth;
 
-            let mut tries = 0;
+            let mut delta = 16;
 
             let (mut alpha, mut beta) = if depth >= 6 {
-                (evaluation - WINDOWS[tries], evaluation + WINDOWS[tries])
+                (evaluation - delta, evaluation + delta)
             } else {
                 (-INFINITY, INFINITY)
             };
@@ -178,15 +171,15 @@ impl<'a> Search<'a> {
 
                 evaluation = self.evaluation_iteration;
 
-                if evaluation <= alpha && tries < WINDOWS.len() - 1 {
-                    tries += 1;
-                    alpha = evaluation.saturating_sub(WINDOWS[tries]);
+                if evaluation <= alpha {
+                    alpha = evaluation.saturating_sub(delta);
+                    delta += delta / 3;
 
                     continue;
                 }
-                if evaluation >= beta && tries < WINDOWS.len() - 1 {
-                    tries += 1;
-                    beta = evaluation.saturating_add(WINDOWS[tries]);
+                if evaluation >= beta {
+                    beta = evaluation.saturating_add(delta);
+                    delta += delta / 3;
 
                     continue;
                 }
