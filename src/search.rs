@@ -372,11 +372,11 @@ impl<'a> Search<'a> {
         let mut moves = board.generate_moves_vec(!EMPTY);
         self.move_sorter.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), self.pv.get(ply as usize - 1).copied(), ply);
         for mv in moves {
-            if let Ok(board) = board.make_move_new(mv) {
+            if let Ok(node_board) = board.make_move_new(mv) {
                 let mut node_pv = [Search::NULL_MOVE; 16];
 
                 legal_moves = true;
-                let score = -self.search(&board, -beta, -alpha, depth.saturating_sub(1) + board.in_check() as u8, ply + 1, &mut node_pv);
+                let score = -self.search(&node_board, -beta, -alpha, depth.saturating_sub(1) + node_board.in_check() as u8, ply + 1, &mut node_pv);
 
                 if score > max {
                     max = score;
