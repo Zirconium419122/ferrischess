@@ -376,7 +376,7 @@ impl<'a> Search<'a> {
                 let mut node_pv = [Search::NULL_MOVE; 16];
 
                 legal_moves = true;
-                let score = -self.search(&node_board, -beta, -alpha, depth.saturating_sub(1) + node_board.in_check() as u8, ply + 1, &mut node_pv);
+                let score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
 
                 if score > max {
                     max = score;
@@ -391,7 +391,7 @@ impl<'a> Search<'a> {
                 }
                 if score >= beta {
                     self.transposition_table.store(
-                        board.hash(),
+                        zobrist_hash,
                         (score, Bound::Lower, mv),
                         depth,
                     );
@@ -425,12 +425,6 @@ impl<'a> Search<'a> {
                 self.transposition_table.store(
                     zobrist_hash,
                     (max, Bound::Upper, best_move),
-                    depth,
-                );
-            } else if max >= beta {
-                self.transposition_table.store(
-                    zobrist_hash,
-                    (max, Bound::Lower, best_move),
                     depth,
                 );
             } else {

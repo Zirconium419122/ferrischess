@@ -49,11 +49,7 @@ impl Eval<'_> {
 
             for (i, file) in FILES.iter().enumerate() {
                 penalty += (pawns & file).count_ones().saturating_sub(1) as i32;
-                penalty += if (pawns & get_adjacent_files(File::from_index(i))) == EMPTY {
-                    1
-                } else {
-                    0
-                };
+                penalty += (pawns & get_adjacent_files(File::from_index(i)) == EMPTY) as i32;
             }
 
             if color == Color::White {
@@ -65,26 +61,29 @@ impl Eval<'_> {
             score -= penalty;
         }
 
-        let white_to_move = self.board.side_to_move == Color::White;
         if self.board.in_check() {
             score -= 50;
         }
 
-        let perspective = if white_to_move { 1 } else { -1 };
-        score * perspective
+        if self.board.side_to_move == Color::White {
+            score
+        } else {
+            score.wrapping_neg()
+        }
     }
 
     fn calculate_game_phase(&self) -> f32 {
+        const TOTAL_PHASE: u32 = 24;
+
         let mut phase = 0;
-        let total_phase = 24;
 
         phase += self.board.pieces(Piece::Knight).count_ones();
         phase += self.board.pieces(Piece::Bishop).count_ones();
         phase += 2 * self.board.pieces(Piece::Rook).count_ones();
         phase += 4 * self.board.pieces(Piece::Queen).count_ones();
 
-        let clamped = phase.min(total_phase);
-        1.0 - (clamped as f32 / total_phase as f32)
+        let clamped = phase.min(TOTAL_PHASE);
+        1.0 - (clamped as f32 / TOTAL_PHASE as f32)
     }
 
     pub fn mate_score(score: i32) -> bool {
