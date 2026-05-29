@@ -101,8 +101,6 @@ pub struct SearchInfo {
 }
 
 impl<'a> Search<'a> {
-    pub const NULL_MOVE: ChessMove = ChessMove { from: Square::A1, to: Square::A1, promotion: None };
-
     pub const MAX_PLY: u8 = 255;
 
     pub fn new(
@@ -122,11 +120,11 @@ impl<'a> Search<'a> {
             move_sorter,
 
             evaluation: 1234567890,
-            best_move: Search::NULL_MOVE,
+            best_move: ChessMove::NULL_MOVE,
             pv: Vec::new(),
 
             evaluation_iteration: 1234567890,
-            best_move_iteration: Search::NULL_MOVE,
+            best_move_iteration: ChessMove::NULL_MOVE,
             pv_iteration: Vec::new(),
 
             nodes: 0,
@@ -147,7 +145,7 @@ impl<'a> Search<'a> {
         };
 
         self.cancelled = false;
-        self.best_move = Search::NULL_MOVE;
+        self.best_move = ChessMove::NULL_MOVE;
 
         let mut evaluation = 0;
 
@@ -184,7 +182,7 @@ impl<'a> Search<'a> {
                     continue;
                 }
 
-                if self.best_move_iteration != Search::NULL_MOVE {
+                if self.best_move_iteration != ChessMove::NULL_MOVE {
                     self.pv = self.pv_iteration.clone();
                     self.evaluation = self.evaluation_iteration;
                     self.best_move = self.best_move_iteration;
@@ -223,7 +221,7 @@ impl<'a> Search<'a> {
     pub fn search_base(&mut self, mut alpha: i32, beta: i32) -> (i32, ChessMove) {
         let mut legal_moves = false;
         let mut max = i32::MIN;
-        let mut best_move = Search::NULL_MOVE;
+        let mut best_move = ChessMove::NULL_MOVE;
 
         let mut inserted = false;
         let zobrist_hash = self.board.hash();
@@ -242,17 +240,17 @@ impl<'a> Search<'a> {
         self.move_sorter.sort_moves(self.board, &mut moves, first_move, self.pv.first().copied(), 1);
         for mv in moves {
             if let Ok(board) = self.board.make_move_new(mv) {
-                let mut base_pv = [Search::NULL_MOVE; 16];
+                let mut base_pv = [ChessMove::NULL_MOVE; 16];
 
                 legal_moves = true;
                 let score = -self.search(&board, -beta, -alpha, self.search_depth - 1, 1, &mut base_pv);
 
                 if self.should_cancel_search() {
-                    if best_move != Search::NULL_MOVE {
+                    if best_move != ChessMove::NULL_MOVE {
                         break;
                     } else {
                         let _ = self.repetition_table.remove(&zobrist_hash);
-                        return (0, Search::NULL_MOVE);
+                        return (0, ChessMove::NULL_MOVE);
                     }
                 }
 
@@ -266,7 +264,7 @@ impl<'a> Search<'a> {
                         self.pv_iteration.clear();
                         self.pv_iteration.push(mv);
                         self.pv_iteration.extend_from_slice(&base_pv);
-                        self.pv_iteration.retain(|mv| *mv != Search::NULL_MOVE);
+                        self.pv_iteration.retain(|mv| *mv != ChessMove::NULL_MOVE);
                     }
                 }
             }
@@ -278,9 +276,9 @@ impl<'a> Search<'a> {
 
         if !legal_moves {
             if self.board.in_check() {
-                return (-Eval::MATE_SCORE, Search::NULL_MOVE);
+                return (-Eval::MATE_SCORE, ChessMove::NULL_MOVE);
             } else {
-                return (0, Search::NULL_MOVE);
+                return (0, ChessMove::NULL_MOVE);
             }
         }
 
@@ -373,7 +371,7 @@ impl<'a> Search<'a> {
         self.move_sorter.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), self.pv.get(ply as usize - 1).copied(), ply);
         for mv in moves {
             if let Ok(node_board) = board.make_move_new(mv) {
-                let mut node_pv = [Search::NULL_MOVE; 16];
+                let mut node_pv = [ChessMove::NULL_MOVE; 16];
 
                 legal_moves = true;
                 let score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);

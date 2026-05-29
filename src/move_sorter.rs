@@ -1,7 +1,5 @@
 use chessframe::{board::Board, chess_move::ChessMove, piece::Piece};
 
-use crate::search::Search;
-
 pub const MVV_LVA: [i8; 36] = [
     15, 14, 13, 12, 11, 10, // victim Pawn, attacker P, N, B, R, Q, K
     25, 24, 23, 22, 21, 20, // victim Knight, attacker P, N, B, R, Q, K
@@ -20,12 +18,12 @@ pub struct MoveSorter {
 impl MoveSorter {
     pub fn new() -> MoveSorter {
         MoveSorter {
-            killer_moves: [Search::NULL_MOVE; KILLER_MOVE_COUNT],
+            killer_moves: [ChessMove::NULL_MOVE; KILLER_MOVE_COUNT],
         }
     }
 
     pub fn clear(&mut self) {
-        self.killer_moves = [Search::NULL_MOVE; KILLER_MOVE_COUNT];
+        self.killer_moves = [ChessMove::NULL_MOVE; KILLER_MOVE_COUNT];
     }
 
     pub fn add_killer_move(&mut self, mv: ChessMove, ply: u8) {

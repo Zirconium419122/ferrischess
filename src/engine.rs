@@ -140,7 +140,7 @@ impl Uci for Engine {
 
                     let score = search_info.evaluation.unwrap() as i32;
 
-                    if search_info.best_move != Some(Search::NULL_MOVE) {
+                    if search_info.best_move != Some(ChessMove::NULL_MOVE) {
                         let score = if Eval::mate_score(score) {
                             let moves_to_mate = Eval::MATE_SCORE - score.abs();
                             let mate_in_moves = (moves_to_mate / 2) + 1;
