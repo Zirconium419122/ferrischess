@@ -9,7 +9,7 @@ use chessframe::{
 
 use crate::piecesquaretable::PieceSquareTable;
 
-pub const PIECE_VALUES: [i32; 6] = [100, 310, 325, 500, 900, 0];
+pub const PIECE_VALUES: [i32; 6] = [100, 310, 350, 500, 900, 0];
 
 pub struct Eval<'a> {
     board: &'a Board,
