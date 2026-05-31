@@ -1,4 +1,4 @@
-use chessframe::{board::Board, chess_move::ChessMove, piece::Piece};
+use chessframe::{board::Board, chess_move::ChessMove, piece::Piece, square::Square};
 
 pub const MVV_LVA: [i8; 36] = [
     15, 14, 13, 12, 11, 10, // victim Pawn, attacker P, N, B, R, Q, K
@@ -12,18 +12,25 @@ pub const MVV_LVA: [i8; 36] = [
 const KILLER_MOVE_COUNT: usize = 12;
 
 pub struct MoveSorter {
+    pub history: [[i16; 64]; 6],
     pub killer_moves: [ChessMove; KILLER_MOVE_COUNT],
 }
 
 impl MoveSorter {
     pub fn new() -> MoveSorter {
         MoveSorter {
+            history: [[0; 64]; 6],
             killer_moves: [ChessMove::NULL_MOVE; KILLER_MOVE_COUNT],
         }
     }
 
     pub fn clear(&mut self) {
         self.killer_moves = [ChessMove::NULL_MOVE; KILLER_MOVE_COUNT];
+    }
+
+    pub fn update_history(&mut self, to: Square, piece: Piece, value: i16) {
+        let entry = &mut self.history[piece.to_index()][to.to_index()];
+        *entry = (*entry + value).clamp(-10_000, 10_000)
     }
 
     pub fn add_killer_move(&mut self, mv: ChessMove, ply: u8) {
@@ -62,22 +69,25 @@ impl MoveSorter {
         ply: u8,
     ) -> i32 {
         if Some(mv) == pv_move {
-            return 20000;
+            return 200_000;
         }
 
         if Some(mv) == tt_move {
-            return 10000;
+            return 100_000;
         }
 
         if let Some(captured) = board.get_piece(mv.to) {
             let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
 
-            return 1000 + Self::get_mvv_lva(captured, moved) as i32;
-        } else if ply < KILLER_MOVE_COUNT as u8 && self.killer_moves[ply as usize] == mv {
-            return 5000;
+            return 10_000 + Self::get_mvv_lva(captured, moved) as i32;
         }
 
-        0
+        if ply < KILLER_MOVE_COUNT as u8 && self.killer_moves[ply as usize] == mv {
+            return 50_000;
+        }
+
+        let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
+        self.history[moved.to_index()][mv.to.to_index()] as i32 / 2
     }
 
     #[inline]

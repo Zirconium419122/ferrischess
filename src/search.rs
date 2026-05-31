@@ -376,6 +376,8 @@ impl<'a> Search<'a> {
                 legal_moves = true;
                 let score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
 
+                let is_quiet = !board.combined().is_set(mv.to);
+
                 if score > max {
                     max = score;
                     best_move = Some(mv);
@@ -395,7 +397,11 @@ impl<'a> Search<'a> {
                     );
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
 
-                    self.move_sorter.add_killer_move(mv, ply);
+                    if is_quiet {
+                        self.move_sorter.update_history(mv.to, unsafe { board.get_piece(mv.from).unwrap_unchecked() }, depth as i16 * depth as i16);
+                    } else {
+                        self.move_sorter.add_killer_move(mv, ply);
+                    }
 
                     return beta;
                 }
