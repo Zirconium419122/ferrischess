@@ -28,6 +28,14 @@ impl MoveSorter {
         self.killer_moves = [ChessMove::NULL_MOVE; KILLER_MOVE_COUNT];
     }
 
+    pub fn age_history(&mut self) {
+        for piece in &mut self.history {
+            for score in piece {
+                *score /= 2;
+            }
+        }
+    }
+
     pub fn update_history(&mut self, to: Square, piece: Piece, value: i16) {
         let entry = &mut self.history[piece.to_index()][to.to_index()];
         *entry = (*entry + value).clamp(-10_000, 10_000)

@@ -231,6 +231,8 @@ impl<'a> Search<'a> {
 
         let original_alpha = alpha;
 
+        self.move_sorter.age_history();
+
         let first_move = self
             .transposition_table
             .get(self.board.hash())
@@ -367,6 +369,8 @@ impl<'a> Search<'a> {
             }
         }
 
+        let mut quiets = Vec::with_capacity(8);
+
         let mut moves = board.generate_moves_vec(!EMPTY);
         self.move_sorter.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), self.pv.get(ply as usize - 1).copied(), ply);
         for mv in moves {
@@ -377,6 +381,9 @@ impl<'a> Search<'a> {
                 let score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
 
                 let is_quiet = !board.combined().is_set(mv.to);
+                if is_quiet {
+                    quiets.push(mv);
+                }
 
                 if score > max {
                     max = score;
@@ -399,6 +406,15 @@ impl<'a> Search<'a> {
 
                     if is_quiet {
                         self.move_sorter.update_history(mv.to, unsafe { board.get_piece(mv.from).unwrap_unchecked() }, depth as i16 * depth as i16);
+
+                        quiets.pop();
+                        for quiet in quiets {
+                            self.move_sorter.update_history(
+                                quiet.to,
+                                unsafe { board.get_piece(quiet.from).unwrap_unchecked() },
+                                -(depth as i16)
+                            );
+                        }
                     } else {
                         self.move_sorter.add_killer_move(mv, ply);
                     }
