@@ -415,7 +415,7 @@ impl<'a> Search<'a> {
                                 -(depth as i16)
                             );
                         }
-                    } else {
+
                         self.move_sorter.add_killer_move(mv, ply);
                     }
 

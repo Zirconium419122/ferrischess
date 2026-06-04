@@ -1,12 +1,12 @@
 use chessframe::{board::Board, chess_move::ChessMove, piece::Piece, square::Square};
 
 pub const MVV_LVA: [i8; 36] = [
-    15, 14, 13, 12, 11, 10, // victim Pawn, attacker P, N, B, R, Q, K
+    15, 14, 13, 12, 11, 10, // victim Pawn,   attacker P, N, B, R, Q, K
     25, 24, 23, 22, 21, 20, // victim Knight, attacker P, N, B, R, Q, K
     35, 34, 33, 32, 31, 30, // victim Bishop, attacker P, N, B, R, Q, K
-    45, 44, 43, 42, 41, 40, // victim Rook, attacker P, N, B, R, Q, K
-    55, 54, 53, 52, 51, 50, // victim Queen, attacker P, N, B, R, Q, K
-     0,  0,  0,  0,  0,  0, // victim King, attacker P, N, B, R, Q, K
+    45, 44, 43, 42, 41, 40, // victim Rook,   attacker P, N, B, R, Q, K
+    55, 54, 53, 52, 51, 50, // victim Queen,  attacker P, N, B, R, Q, K
+     0,  0,  0,  0,  0,  0, // victim King,   attacker P, N, B, R, Q, K
 ];
 
 const KILLER_MOVE_COUNT: usize = 12;
@@ -87,11 +87,11 @@ impl MoveSorter {
         if let Some(captured) = board.get_piece(mv.to) {
             let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
 
-            return 10_000 + Self::get_mvv_lva(captured, moved) as i32;
+            return 50_000 + Self::get_mvv_lva(captured, moved) as i32;
         }
 
         if ply < KILLER_MOVE_COUNT as u8 && self.killer_moves[ply as usize] == mv {
-            return 50_000;
+            return 20_000;
         }
 
         let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
