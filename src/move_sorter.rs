@@ -25,6 +25,7 @@ impl MoveSorter {
     }
 
     pub fn clear(&mut self) {
+        self.history = [[0; 64]; 6];
         self.killer_moves = [ChessMove::NULL_MOVE; KILLER_MOVE_COUNT];
     }
 
@@ -100,9 +101,6 @@ impl MoveSorter {
 
     #[inline]
     fn get_mvv_lva(victim: Piece, attacker: Piece) -> i8 {
-        unsafe {
-            *MVV_LVA
-                .get_unchecked(victim.to_index() * 6 + attacker.to_index())
-        }
+        unsafe { *MVV_LVA.get_unchecked(victim.to_index() * 6 + attacker.to_index()) }
     }
 }

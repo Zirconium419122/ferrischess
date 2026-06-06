@@ -1,7 +1,8 @@
 use std::{collections::HashSet, time::Instant};
 
 use chessframe::{
-    bitboard::EMPTY, board::Board, chess_move::ChessMove, piece::Piece, square::Square, transpositiontable::TranspositionTable
+    bitboard::EMPTY, board::Board, chess_move::ChessMove, piece::Piece,
+    transpositiontable::TranspositionTable,
 };
 
 use crate::{eval::Eval, move_sorter::MoveSorter};
@@ -337,7 +338,12 @@ impl<'a> Search<'a> {
 
         let entry = self.transposition_table.get(zobrist_hash).copied();
 
-        if !board.in_check() && (board.occupancy(board.side_to_move) ^ board.pieces_color(Piece::Pawn, board.side_to_move)).count_ones() != 1 {
+        if !board.in_check()
+            && (board.occupancy(board.side_to_move)
+                ^ board.pieces_color(Piece::Pawn, board.side_to_move))
+            .count_ones()
+                != 1
+        {
             if let Ok(board) = board.make_null_move_new() {
                 let mut node_pv = [ChessMove::NULL_MOVE; 16];
 
@@ -405,14 +411,18 @@ impl<'a> Search<'a> {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
 
                     if is_quiet {
-                        self.move_sorter.update_history(mv.to, unsafe { board.get_piece(mv.from).unwrap_unchecked() }, depth as i16 * depth as i16);
+                        self.move_sorter.update_history(
+                            mv.to,
+                            unsafe { board.get_piece(mv.from).unwrap_unchecked() },
+                            depth as i16 * depth as i16,
+                        );
 
                         quiets.pop();
                         for quiet in quiets {
                             self.move_sorter.update_history(
                                 quiet.to,
                                 unsafe { board.get_piece(quiet.from).unwrap_unchecked() },
-                                -(depth as i16)
+                                -(depth as i16),
                             );
                         }
 
