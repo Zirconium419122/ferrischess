@@ -366,7 +366,10 @@ impl<'a> Search<'a> {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
                     return corrected_score;
                 }
-                // Bound::Lower if corrected_score >= beta => return corrected_score,
+                Bound::Lower if corrected_score >= beta => {
+                    if inserted { self.repetition_table.remove(&zobrist_hash); }
+                    return corrected_score;
+                }
                 Bound::Upper if corrected_score <= alpha => {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
                     return corrected_score;

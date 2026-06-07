@@ -1,5 +1,7 @@
 use chessframe::{board::Board, chess_move::ChessMove, piece::Piece, square::Square};
 
+use crate::eval::Eval;
+
 pub const MVV_LVA: [i8; 36] = [
     15, 14, 13, 12, 11, 10, // victim Pawn,   attacker P, N, B, R, Q, K
     25, 24, 23, 22, 21, 20, // victim Knight, attacker P, N, B, R, Q, K
@@ -37,11 +39,13 @@ impl MoveSorter {
         }
     }
 
+    #[inline]
     pub fn update_history(&mut self, to: Square, piece: Piece, value: i16) {
         let entry = &mut self.history[piece.to_index()][to.to_index()];
         *entry = (*entry + value).clamp(-10_000, 10_000)
     }
 
+    #[inline]
     pub fn add_killer_move(&mut self, mv: ChessMove, ply: u8) {
         if ply < KILLER_MOVE_COUNT as u8 {
             self.killer_moves[ply as usize] = mv
@@ -77,17 +81,20 @@ impl MoveSorter {
         pv_move: Option<ChessMove>,
         ply: u8,
     ) -> i32 {
-        if Some(mv) == pv_move {
+        if Some(mv) == tt_move {
             return 200_000;
         }
 
-        if Some(mv) == tt_move {
+        if Some(mv) == pv_move {
             return 100_000;
         }
 
-        if let Some(captured) = board.get_piece(mv.to) {
-            let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
+        if let Some(promotion) = mv.promotion() {
+            return 60_000 + Eval::piece_value(promotion);
+        }
 
+        let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
+        if let Some(captured) = board.get_piece(mv.to) {
             return 50_000 + Self::get_mvv_lva(captured, moved) as i32;
         }
 
@@ -95,7 +102,6 @@ impl MoveSorter {
             return 20_000;
         }
 
-        let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
         self.history[moved.to_index()][mv.to.to_index()] as i32 / 2
     }
 
