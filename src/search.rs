@@ -240,7 +240,7 @@ impl<'a> Search<'a> {
             .map(|entry| entry.value.2);
 
         let mut moves = self.board.generate_moves_vec(!EMPTY);
-        self.move_sorter.sort_moves(self.board, &mut moves, first_move, self.pv.first().copied(), 1);
+        self.move_sorter.sort_moves(self.board, &mut moves, first_move, 1);
         for mv in moves {
             if let Ok(board) = self.board.make_move_new(mv) {
                 let mut base_pv = [ChessMove::NULL_MOVE; 16];
@@ -338,24 +338,6 @@ impl<'a> Search<'a> {
 
         let entry = self.transposition_table.get(zobrist_hash).copied();
 
-        if !board.in_check()
-            && (board.occupancy(board.side_to_move)
-                ^ board.pieces_color(Piece::Pawn, board.side_to_move))
-            .count_ones()
-                != 1
-        {
-            if let Ok(board) = board.make_null_move_new() {
-                let mut node_pv = [ChessMove::NULL_MOVE; 16];
-
-                let score = -self.search(&board, -beta, -(beta - 1), depth.saturating_sub(3), ply + 1, &mut node_pv);
-
-                if score >= beta {
-                    if inserted { self.repetition_table.remove(&zobrist_hash); }
-                    return score;
-                }
-            }
-        }
-
         if let Some(entry) = entry
             && entry.depth >= depth
         {
@@ -378,10 +360,28 @@ impl<'a> Search<'a> {
             }
         }
 
+        if !board.in_check()
+            && (board.occupancy(board.side_to_move)
+                ^ board.pieces_color(Piece::Pawn, board.side_to_move))
+            .count_ones()
+                != 1
+        {
+            if let Ok(board) = board.make_null_move_new() {
+                let mut node_pv = [ChessMove::NULL_MOVE; 16];
+
+                let score = -self.search(&board, -beta, -(beta - 1), depth.saturating_sub(3), ply + 1, &mut node_pv);
+
+                if score >= beta {
+                    if inserted { self.repetition_table.remove(&zobrist_hash); }
+                    return score;
+                }
+            }
+        }
+
         let mut quiets = Vec::with_capacity(8);
 
         let mut moves = board.generate_moves_vec(!EMPTY);
-        self.move_sorter.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), self.pv.get(ply as usize - 1).copied(), ply);
+        self.move_sorter.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), ply);
         for mv in moves {
             if let Ok(node_board) = board.make_move_new(mv) {
                 let mut node_pv = [ChessMove::NULL_MOVE; 16];
@@ -485,7 +485,7 @@ impl<'a> Search<'a> {
         }
 
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
-        self.move_sorter.sort_moves(board, &mut moves, None, self.pv.get(ply as usize - 1).copied(), ply);
+        self.move_sorter.sort_moves(board, &mut moves, None, ply);
         for mv in moves {
             if let Ok(board) = board.make_move_new(mv) {
                 let score = -self.search_captures(&board, -beta, -alpha, ply + 1);
