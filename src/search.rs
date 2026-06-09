@@ -332,7 +332,7 @@ impl<'a> Search<'a> {
         };
 
         let original_alpha = alpha;
-        let mut legal_moves = false;
+        let mut legal_moves = 0;
         let mut max = i32::MIN;
         let mut best_move = None;
 
@@ -386,13 +386,14 @@ impl<'a> Search<'a> {
             if let Ok(node_board) = board.make_move_new(mv) {
                 let mut node_pv = [ChessMove::NULL_MOVE; 16];
 
-                legal_moves = true;
-                let score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
-
                 let is_quiet = !board.combined().is_set(mv.to);
                 if is_quiet {
                     quiets.push(mv);
                 }
+
+                legal_moves += 1;
+
+                let score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
 
                 if score > max {
                     max = score;
@@ -432,7 +433,7 @@ impl<'a> Search<'a> {
                         self.move_sorter.add_killer_move(mv, ply);
                     }
 
-                    return beta;
+                    return score;
                 }
 
                 if self.should_cancel_search() {
@@ -445,7 +446,7 @@ impl<'a> Search<'a> {
 
         if inserted { self.repetition_table.remove(&zobrist_hash); }
 
-        if !legal_moves {
+        if legal_moves == 0 {
             if board.in_check() {
                 return -Eval::MATE_SCORE + ply as i32;
             } else {
@@ -476,12 +477,12 @@ impl<'a> Search<'a> {
         self.seldepth = self.seldepth.max(ply);
         self.nodes += 1;
 
-        let eval = Eval::new(board).eval();
-        if eval >= beta {
-            return eval;
+        let mut max = Eval::new(board).eval();
+        if max >= beta {
+            return max;
         }
-        if eval > alpha {
-            alpha = eval;
+        if max > alpha {
+            alpha = max;
         }
 
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
@@ -490,16 +491,20 @@ impl<'a> Search<'a> {
             if let Ok(board) = board.make_move_new(mv) {
                 let score = -self.search_captures(&board, -beta, -alpha, ply + 1);
 
+                if score > max {
+                    max = score;
+
+                    if score > alpha {
+                        alpha = score;
+                    }
+                }
                 if score >= beta {
                     return score;
-                }
-                if score > alpha {
-                    alpha = score;
                 }
             }
         }
 
-        alpha
+        max
     }
 
     fn correct_mate_score(score: i32, ply: u8) -> i32 {

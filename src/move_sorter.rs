@@ -127,57 +127,31 @@ impl MoveSorter {
         let mut gain = [0; 16];
         let mut depth = 0;
 
-        // println!("Board:\n{}", occ);
-        // println!("Attackers:\n{}", self.attackers_to(board, target, side, occ));
-
         gain[0] = Eval::piece_value(victim);
-
-        // // let moving = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
-        // occ.clear_bit(mv.from);
-
-        // println!("Board:\n{}", occ);
-
-        // dbg!(gain);
-
-        // side = !side;
 
         loop {
             let attackers = self.attackers_to(board, target, side, occ);
-            // println!("Attackers:\n{}", attackers);
             if attackers.is_zero() {
                 break;
             }
-
-            // dbg!(gain);
 
             let (from_square, attacker_piece) =
                 self.least_valuable_attacker(board, side, attackers);
             depth += 1;
 
-            // dbg!(self.least_valuable_attacker(board, side, attackers), depth);
-
             gain[depth] = Eval::piece_value(attacker_piece) - gain[depth - 1];
-
-            // dbg!(gain);
 
             occ.clear_bit(from_square);
 
-            // println!("Board:\n{}", occ);
-
             side = !side;
         }
-
-        // dbg!(gain, depth);
 
         while depth > 1 {
             depth -= 1;
             if gain[depth - 1] > -gain[depth] {
                 gain[depth - 1] = -gain[depth]
             }
-            // dbg!(gain, depth);
         }
-
-        // println!("Gain: {}", gain[0]);
 
         gain[0]
     }
