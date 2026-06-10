@@ -1,7 +1,7 @@
 use chessframe::{
     bitboard::EMPTY,
     board::Board,
-    color::{COLORS, Color},
+    color::Color,
     file::File,
     magic::{FILES, get_adjacent_files},
     piece::Piece,
@@ -43,23 +43,8 @@ impl Eval<'_> {
                 + PieceSquareTable::read(square, piece, Color::Black, game_phase) as i32;
         }
 
-        for color in COLORS {
-            let pawns = self.board.pieces_color(Piece::Pawn, color);
-            let mut penalty = 0;
-
-            for (i, file) in FILES.iter().enumerate() {
-                penalty += (pawns & file).count_ones().saturating_sub(1) as i32;
-                penalty += (pawns & get_adjacent_files(File::from_index(i)) == EMPTY) as i32;
-            }
-
-            if color == Color::White {
-                penalty *= 25;
-            } else {
-                penalty *= -25;
-            }
-
-            score -= penalty;
-        }
+        score += self.pawn_structure_score(Color::White);
+        score += self.pawn_structure_score(Color::Black);
 
         if self.board.in_check() {
             score -= 50;
@@ -68,7 +53,30 @@ impl Eval<'_> {
         if self.board.side_to_move == Color::White {
             score
         } else {
-            score.wrapping_neg()
+            -score
+        }
+    }
+
+    pub fn pawn_structure_score(&self, color: Color) -> i32 {
+        let pawns = self.board.pieces_color(Piece::Pawn, color);
+        let mut score = 0;
+
+        for (i, file) in FILES.iter().enumerate() {
+            let on_file = (pawns & file).count_ones() as i32;
+
+            if on_file > 1 {
+                score -= (on_file - 1) * 25;
+            }
+
+            if pawns & get_adjacent_files(File::from_index(i)) == EMPTY {
+                score -= 25;
+            }
+        }
+
+        if color == Color::White {
+            score
+        } else {
+            -score
         }
     }
 
@@ -83,7 +91,7 @@ impl Eval<'_> {
         phase += 4 * self.board.pieces(Piece::Queen).count_ones();
 
         let clamped = phase.min(TOTAL_PHASE);
-        1.0 - (clamped as f32 / TOTAL_PHASE as f32)
+        clamped as f32 / TOTAL_PHASE as f32
     }
 
     pub fn mate_score(score: i32) -> bool {

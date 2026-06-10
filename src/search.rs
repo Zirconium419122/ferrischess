@@ -336,6 +336,8 @@ impl<'a> Search<'a> {
         let mut max = i32::MIN;
         let mut best_move = None;
 
+        let is_pv = alpha != beta - 1;
+
         let entry = self.transposition_table.get(zobrist_hash).copied();
 
         if let Some(entry) = entry
@@ -393,7 +395,17 @@ impl<'a> Search<'a> {
 
                 legal_moves += 1;
 
-                let score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
+                let mut score;
+
+                if legal_moves == 0 {
+                    score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
+                } else {
+                    score = -self.search(&node_board, -alpha - 1, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
+
+                    if score > alpha && is_pv {
+                        score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
+                    }
+                }
 
                 if score > max {
                     max = score;
