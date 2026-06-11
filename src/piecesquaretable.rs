@@ -101,7 +101,7 @@ impl PieceSquareTable {
         Self::KING,
     ];
 
-    pub fn read(square: Square, piece: Piece, color: Color, game_phase: f32) -> i8 {
+    pub fn read(square: Square, piece: Piece, color: Color, game_phase: i32) -> i8 {
         let mut square = square;
 
         if color == Color::White {
@@ -113,24 +113,24 @@ impl PieceSquareTable {
 
         if piece == Piece::Pawn {
             let pawn_start = unsafe {
-                Self::PAWN.get_unchecked(square.to_index())
-            };
+                *Self::PAWN.get_unchecked(square.to_index())
+            } as i32;
             let pawn_end = unsafe {
-                Self::PAWN_END.get_unchecked(square.to_index())
-            };
-            let interpolated = (*pawn_start as f32 * game_phase + *pawn_end as f32 * (1.0 - game_phase)) as i8;
+                *Self::PAWN_END.get_unchecked(square.to_index())
+            } as i32;
+            let interpolated = (pawn_start * game_phase + pawn_end * (24 - game_phase)) / 24;
 
-            return interpolated;
+            return interpolated as i8;
         } else if piece == Piece::King {
             let king_start = unsafe {
-                Self::KING.get_unchecked(square.to_index())
-            };
+                *Self::KING.get_unchecked(square.to_index())
+            } as i32;
             let king_end = unsafe {
-                Self::KING_END.get_unchecked(square.to_index())
-            };
-            let interpolated = (*king_start as f32 * game_phase + *king_end as f32 * (1.0 - game_phase)) as i8;
+                *Self::KING_END.get_unchecked(square.to_index())
+            } as i32;
+            let interpolated = (king_start * game_phase + king_end * (24 - game_phase)) / 24;
 
-            return interpolated;
+            return interpolated as i8;
         }
 
         unsafe {

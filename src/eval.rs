@@ -46,6 +46,9 @@ impl Eval<'_> {
         score += self.pawn_structure_score(Color::White);
         score += self.pawn_structure_score(Color::Black);
 
+        score += self.piece_combination_score(Color::White, game_phase);
+        score += self.piece_combination_score(Color::Black, game_phase);
+
         if self.board.in_check() {
             score -= 50;
         }
@@ -80,7 +83,25 @@ impl Eval<'_> {
         }
     }
 
-    fn calculate_game_phase(&self) -> f32 {
+    pub fn piece_combination_score(&self, color: Color, game_phase: i32) -> i32 {
+        let mut score = 0;
+
+        if self.board.pieces_color(Piece::Bishop, color).count_ones() >= 2 {
+            score += (10 * game_phase + 35 * (24 - game_phase)) / 24;
+        }
+
+        if self.board.pieces_color(Piece::Knight, color).count_ones() >= 2 {
+            score += (5 * game_phase + -10 * (24 - game_phase)) / 24;
+        }
+
+        if color == Color::White {
+            score
+        } else {
+            -score
+        }
+    }
+
+    fn calculate_game_phase(&self) -> i32 {
         const TOTAL_PHASE: u32 = 24;
 
         let mut phase = 0;
@@ -91,7 +112,7 @@ impl Eval<'_> {
         phase += 4 * self.board.pieces(Piece::Queen).count_ones();
 
         let clamped = phase.min(TOTAL_PHASE);
-        clamped as f32 / TOTAL_PHASE as f32
+        clamped as i32
     }
 
     pub fn mate_score(score: i32) -> bool {
