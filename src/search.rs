@@ -207,7 +207,7 @@ impl<'a> Search<'a> {
             seldepth: Some(self.seldepth as usize),
             time: Some(elapsed),
             nodes: Some(nodes),
-            nps: Some((nodes as f32 * 1000.0 / elapsed as f32).round() as usize),
+            nps: Some((nodes as f32 * 1000.0 / elapsed.max(1) as f32).round() as usize),
             evaluation: Some(self.evaluation as isize),
             best_move: Some(self.best_move),
             pv: Some(self.pv.clone()),
@@ -332,7 +332,7 @@ impl<'a> Search<'a> {
         };
 
         let original_alpha = alpha;
-        let mut legal_moves = 0;
+        let mut legal_moves: u8 = 0;
         let mut max = i32::MIN;
         let mut best_move = None;
 
@@ -371,7 +371,9 @@ impl<'a> Search<'a> {
             if let Ok(board) = board.make_null_move_new() {
                 let mut node_pv = [ChessMove::NULL_MOVE; 16];
 
-                let score = -self.search(&board, -beta, -(beta - 1), depth.saturating_sub(3), ply + 1, &mut node_pv);
+                let reduction = 3;
+
+                let score = -self.search(&board, -beta, -(beta - 1), depth.saturating_sub(reduction), ply + 1, &mut node_pv);
 
                 if score >= beta {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
@@ -395,16 +397,26 @@ impl<'a> Search<'a> {
 
                 legal_moves += 1;
 
-                let mut score;
+                let mut score = i32::MIN;
 
-                if legal_moves == 0 {
-                    score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
-                } else {
-                    score = -self.search(&node_board, -alpha - 1, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
+                // Don't reduce on captures, promotions and checks, because of instabilities.
+                if depth >= 4 && legal_moves >= 4 && is_quiet && !node_board.in_check() && mv.promotion().is_none() {
+                    // reduction quiet:   1 + log_3(depth) * log_3(legal_moves) * 1 / 2
+                    // reduction capture: 0 + log_3(depth) * log_3(legal_moves) * 2 / 5
 
-                    if score > alpha && is_pv {
-                        score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
+                    let reduction = 1 + depth.ilog(3) * legal_moves.ilog(3) / 2;
+
+                    score = -self.search(&node_board, -alpha - 1, -alpha, depth - 1 - reduction as u8, ply + 1, &mut node_pv);
+
+                    if score > alpha {
+                        score = -self.search(&node_board, -alpha - 1, -alpha, depth - 1, ply + 1, &mut node_pv);
                     }
+                } else if !is_pv || legal_moves > 1 {
+                    score = -self.search(&node_board, -alpha - 1, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
+                }
+
+                if is_pv && (legal_moves == 1 || score > alpha) {
+                    score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut node_pv);
                 }
 
                 if score > max {

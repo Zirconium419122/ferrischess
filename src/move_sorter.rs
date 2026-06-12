@@ -51,7 +51,7 @@ impl MoveSorter {
     #[inline]
     pub fn update_history(&mut self, to: Square, piece: Piece, value: i16) {
         let entry = &mut self.history[piece.to_index()][to.to_index()];
-        *entry = (*entry + value).clamp(-10_000, 10_000)
+        *entry = (*entry + value).clamp(-20_000, 20_000)
     }
 
     #[inline]
@@ -111,7 +111,7 @@ impl MoveSorter {
             return 40_000;
         }
 
-        self.history[moved.to_index()][mv.to.to_index()] as i32 / 2
+        self.history[moved.to_index()][mv.to.to_index()] as i32
     }
 
     fn see(&self, board: &Board, mv: ChessMove) -> i32 {
