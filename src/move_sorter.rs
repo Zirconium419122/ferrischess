@@ -93,7 +93,7 @@ impl MoveSorter {
         }
 
         if let Some(promotion) = mv.promotion() {
-            return 60_000 + Eval::piece_value(promotion);
+            return 40_000 + Eval::piece_value(promotion);
         }
 
         let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };

@@ -171,13 +171,13 @@ impl<'a> Search<'a> {
                 evaluation = self.evaluation_iteration;
 
                 if evaluation <= alpha {
-                    alpha = evaluation.saturating_sub(delta);
+                    alpha = alpha.saturating_sub(delta);
                     delta += delta / 3;
 
                     continue;
                 }
                 if evaluation >= beta {
-                    beta = evaluation.saturating_add(delta);
+                    beta = beta.saturating_add(delta);
                     delta += delta / 3;
 
                     continue;
@@ -262,6 +262,10 @@ impl<'a> Search<'a> {
                     best_move = mv;
 
                     if score > alpha {
+                        if score >= beta {
+                            break;
+                        }
+
                         alpha = score;
 
                         self.pv_iteration.clear();
@@ -312,7 +316,7 @@ impl<'a> Search<'a> {
         &mut self,
         board: &Board,
         mut alpha: i32,
-        beta: i32,
+        mut beta: i32,
         depth: u8,
         ply: u8,
         pv: &mut [ChessMove],
@@ -342,6 +346,7 @@ impl<'a> Search<'a> {
 
         if let Some(entry) = entry
             && entry.depth >= depth
+            && !is_pv
         {
             let corrected_score = Self::correct_mate_score(entry.value.0, ply);
 
@@ -352,6 +357,15 @@ impl<'a> Search<'a> {
                 }
                 Bound::Lower if corrected_score >= beta => {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
+
+                    if !board.combined().is_set(entry.value.2.to) {
+                        self.move_sorter.update_history(
+                            entry.value.2.to,
+                            unsafe { board.get_piece(entry.value.2.from).unwrap_unchecked() },
+                            depth as i16 * depth as i16
+                        );
+                    }
+
                     return corrected_score;
                 }
                 Bound::Upper if corrected_score <= alpha => {
@@ -362,7 +376,15 @@ impl<'a> Search<'a> {
             }
         }
 
-        if !board.in_check()
+        alpha = alpha.max(-Eval::MATE_SCORE + ply as i32);
+        beta = beta.min(Eval::MATE_SCORE - ply as i32);
+
+        if alpha >= beta {
+            return alpha;
+        }
+
+        if !is_pv
+            && !board.in_check()
             && (board.occupancy(board.side_to_move)
                 ^ board.pieces_color(Piece::Pawn, board.side_to_move))
             .count_ones()
@@ -371,7 +393,7 @@ impl<'a> Search<'a> {
             if let Ok(board) = board.make_null_move_new() {
                 let mut node_pv = [ChessMove::NULL_MOVE; 16];
 
-                let reduction = 3;
+                let reduction = 4 + depth / 6;
 
                 let score = -self.search(&board, -beta, -(beta - 1), depth.saturating_sub(reduction), ply + 1, &mut node_pv);
 

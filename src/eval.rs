@@ -29,7 +29,7 @@ impl Eval<'_> {
     pub fn eval(&self) -> i32 {
         let mut score = 0;
 
-        let game_phase = self.calculate_game_phase();
+        let game_phase = Self::calculate_game_phase(self.board);
 
         for square in self.board.occupancy(Color::White) {
             let piece = unsafe { self.board.get_piece(square).unwrap_unchecked() };
@@ -101,15 +101,15 @@ impl Eval<'_> {
         }
     }
 
-    fn calculate_game_phase(&self) -> i32 {
+    pub fn calculate_game_phase(board: &Board) -> i32 {
         const TOTAL_PHASE: u32 = 24;
 
         let mut phase = 0;
 
-        phase += self.board.pieces(Piece::Knight).count_ones();
-        phase += self.board.pieces(Piece::Bishop).count_ones();
-        phase += 2 * self.board.pieces(Piece::Rook).count_ones();
-        phase += 4 * self.board.pieces(Piece::Queen).count_ones();
+        phase += board.pieces(Piece::Knight).count_ones();
+        phase += board.pieces(Piece::Bishop).count_ones();
+        phase += 2 * board.pieces(Piece::Rook).count_ones();
+        phase += 4 * board.pieces(Piece::Queen).count_ones();
 
         let clamped = phase.min(TOTAL_PHASE);
         clamped as i32
