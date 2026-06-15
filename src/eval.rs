@@ -54,11 +54,11 @@ impl Eval<'_> {
         score += self.piece_combination_score(Color::White, game_phase);
         score += self.piece_combination_score(Color::Black, game_phase);
 
+        score += mobility_score;
+
         if self.board.in_check() {
             score -= 50;
         }
-
-        score += mobility_score;
 
         if self.board.side_to_move == Color::White {
             score
@@ -94,11 +94,11 @@ impl Eval<'_> {
         let mut score = 0;
 
         if self.board.pieces_color(Piece::Bishop, color).count_ones() >= 2 {
-            score += (30 * game_phase + 80 * (24 - game_phase)) / 24;
+            score += (30 * (256 - game_phase) + 80 * game_phase) / 256;
         }
 
         if self.board.pieces_color(Piece::Knight, color).count_ones() >= 2 {
-            score += (5 * game_phase + -10 * (24 - game_phase)) / 24;
+            score += (5 * (256 - game_phase) + -10 * game_phase) / 256;
         }
 
         if color == Color::White {
@@ -142,7 +142,7 @@ impl Eval<'_> {
         phase += 4 * board.pieces(Piece::Queen).count_ones();
 
         let clamped = phase.min(TOTAL_PHASE);
-        clamped as i32
+        256 * (24 - clamped as i32) / 24
     }
 
     pub fn mate_score(score: i32) -> bool {

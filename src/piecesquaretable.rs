@@ -10,7 +10,7 @@ impl PieceSquareTable {
          20, 20, 20, 25, 25, 20, 20, 20,
           0,  0,  0, 25, 25,  0,  0,  0,
           0,  0,  0, 25, 25,  0,  0,  0,
-         15,  0,  0,  0,  0,  0,  0, 15,
+         10,  0,  0,  5,  5,  0,  0, 10,
           0, 10, 10,-20,-20, 10, 10,  0,
           0,  0,  0,  0,  0,  0,  0,  0,
     ];
@@ -118,7 +118,7 @@ impl PieceSquareTable {
             let pawn_end = unsafe {
                 *Self::PAWN_END.get_unchecked(square.to_index())
             } as i32;
-            let interpolated = (pawn_start * game_phase + pawn_end * (24 - game_phase)) / 24;
+            let interpolated = (pawn_start * (256 - game_phase) + pawn_end * game_phase) / 256;
 
             return interpolated as i8;
         } else if piece == Piece::King {
@@ -128,7 +128,7 @@ impl PieceSquareTable {
             let king_end = unsafe {
                 *Self::KING_END.get_unchecked(square.to_index())
             } as i32;
-            let interpolated = (king_start * game_phase + king_end * (24 - game_phase)) / 24;
+            let interpolated = (king_start * (256 - game_phase) + king_end * game_phase) / 256;
 
             return interpolated as i8;
         }
