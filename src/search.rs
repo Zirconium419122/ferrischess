@@ -220,17 +220,18 @@ impl<'a> Search<'a> {
     }
 
     pub fn search_base(&mut self, mut alpha: i32, beta: i32) -> (i32, ChessMove) {
-        let mut legal_moves = false;
+        let original_alpha = alpha;
+        let mut legal_moves: u8 = 0;
         let mut max = i32::MIN;
         let mut best_move = ChessMove::NULL_MOVE;
 
-        let mut inserted = false;
         let zobrist_hash = self.board.hash();
-        if !self.repetition_table.contains(&zobrist_hash) {
-            inserted = self.repetition_table.insert(zobrist_hash);
-        }
 
-        let original_alpha = alpha;
+        let inserted = if !self.repetition_table.contains(&zobrist_hash) {
+            self.repetition_table.insert(zobrist_hash)
+        } else {
+            false
+        };
 
         self.move_sorter.age_history();
 
@@ -245,7 +246,7 @@ impl<'a> Search<'a> {
             if let Ok(board) = self.board.make_move_new(mv) {
                 let mut base_pv = [ChessMove::NULL_MOVE; 16];
 
-                legal_moves = true;
+                legal_moves += 1;
                 let score = -self.search(&board, -beta, -alpha, self.search_depth - 1, 1, &mut base_pv);
 
                 if self.should_cancel_search() {
@@ -281,7 +282,7 @@ impl<'a> Search<'a> {
             self.repetition_table.remove(&zobrist_hash);
         }
 
-        if !legal_moves {
+        if legal_moves == 0 {
             if self.board.in_check() {
                 return (-Eval::MATE_SCORE, ChessMove::NULL_MOVE);
             } else {
@@ -338,7 +339,7 @@ impl<'a> Search<'a> {
         let original_alpha = alpha;
         let mut legal_moves: u8 = 0;
         let mut max = i32::MIN;
-        let mut best_move = None;
+        let mut best_move = ChessMove::NULL_MOVE;
 
         let is_pv = alpha != beta - 1;
 
@@ -422,11 +423,11 @@ impl<'a> Search<'a> {
                 let mut score = i32::MIN;
 
                 // Don't reduce on captures, promotions and checks, because of instabilities.
-                if depth >= 4 && legal_moves >= 4 && is_quiet && !node_board.in_check() && mv.promotion().is_none() {
+                if depth >= 3 && legal_moves >= 3 && is_quiet && !node_board.in_check() && mv.promotion().is_none() {
                     // reduction quiet:   1 + log_3(depth) * log_3(legal_moves) * 1 / 2
                     // reduction capture: 0 + log_3(depth) * log_3(legal_moves) * 2 / 5
 
-                    let reduction = 1 + depth.ilog(3) * legal_moves.ilog(3) / 2;
+                    let reduction = 1 + depth.ilog(3) * legal_moves.ilog(3) / 2 - is_pv as u32;
 
                     score = -self.search(&node_board, -alpha - 1, -alpha, depth - 1 - reduction as u8, ply + 1, &mut node_pv);
 
@@ -443,7 +444,7 @@ impl<'a> Search<'a> {
 
                 if score > max {
                     max = score;
-                    best_move = Some(mv);
+                    best_move = mv;
 
                     if score > alpha {
                         alpha = score;
@@ -500,7 +501,7 @@ impl<'a> Search<'a> {
             }
         }
 
-        if let Some(best_move) = best_move {
+        if best_move != ChessMove::NULL_MOVE {
             if max <= original_alpha {
                 self.transposition_table.store(
                     zobrist_hash,
@@ -554,7 +555,7 @@ impl<'a> Search<'a> {
     }
 
     fn correct_mate_score(score: i32, ply: u8) -> i32 {
-        if score.abs() > Eval::MATE_SCORE - 1000 {
+        if Eval::mate_score(score) {
             let sign = score.signum();
             return (score * sign - ply as i32) * sign;
         }

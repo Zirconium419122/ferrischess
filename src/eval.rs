@@ -9,7 +9,13 @@ use chessframe::{
 
 use crate::piecesquaretable::PieceSquareTable;
 
-pub const PIECE_VALUES: [i32; 6] = [100, 310, 350, 500, 900, 0];
+#[inline(always)]
+pub const fn s(mg: i32, eg: i32) -> i32 {
+    mg + (eg << 16)
+}
+
+pub const PIECE_VALUES_MG: [i32; 6] = [100, 310, 350, 500, 900, 0];
+pub const PIECE_VALUES_EG: [i32; 6] = [100, 310, 350, 500, 900, 0];
 
 pub struct Eval<'a> {
     board: &'a Board,
@@ -23,10 +29,10 @@ impl Eval<'_> {
     }
 
     pub fn piece_value(piece: Piece) -> i32 {
-        let mg_score = unsafe { *PIECE_VALUES.get_unchecked(piece.to_index()) };
-        let eg_score = unsafe { *PIECE_VALUES.get_unchecked(piece.to_index()) };
+        let mg_score = unsafe { *PIECE_VALUES_MG.get_unchecked(piece.to_index()) };
+        let eg_score = unsafe { *PIECE_VALUES_EG.get_unchecked(piece.to_index()) };
 
-        mg_score + (eg_score << 16)
+        s(mg_score, eg_score)
     }
 
     pub fn eval(&self) -> i32 {
@@ -84,11 +90,11 @@ impl Eval<'_> {
 
             if on_file > 1 {
                 let doubles = on_file - 1;
-                score -= doubles * 25 + ((doubles * 25) << 16);
+                score -= s(doubles * 20, doubles * 40);
             }
 
             if pawns & get_adjacent_files(File::from_index(i)) == EMPTY {
-                score -= 25 + (25 << 16);
+                score -= s(10, 20);
             }
         }
 
@@ -103,11 +109,11 @@ impl Eval<'_> {
         let mut score = 0;
 
         if self.board.pieces_color(Piece::Bishop, color).count_ones() >= 2 {
-            score += 30 + (80 << 16);
+            score += s(30, 80);
         }
 
         if self.board.pieces_color(Piece::Knight, color).count_ones() >= 2 {
-            score += 5 + (-10 << 16);
+            score += s(5, -10);
         }
 
         if color == Color::White {
@@ -132,26 +138,26 @@ impl Eval<'_> {
         } & !allied_pieces & !pawn_attacks).count_ones() as i32;
 
         match piece {
-            Piece::Knight => mobility * 4 + ((mobility * 4) << 16),
-            Piece::Bishop => mobility * 5 + ((mobility * 5) << 16),
-            Piece::Rook => mobility * 2 + ((mobility * 4) << 16),
-            Piece::Queen => mobility + ((mobility * 2) << 16),
+            Piece::Knight => s(mobility * 4, mobility * 4),
+            Piece::Bishop => s(mobility * 5, mobility * 5),
+            Piece::Rook => s(mobility * 2, mobility * 4),
+            Piece::Queen => s(mobility, mobility * 2),
             _ => unreachable!(),
         }
     }
 
     pub fn calculate_game_phase(board: &Board) -> i32 {
-        const TOTAL_PHASE: u32 = 24;
+        const TOTAL_PHASE: i32 = 24;
 
         let mut phase = 0;
 
-        phase += board.pieces(Piece::Knight).count_ones();
-        phase += board.pieces(Piece::Bishop).count_ones();
-        phase += 2 * board.pieces(Piece::Rook).count_ones();
-        phase += 4 * board.pieces(Piece::Queen).count_ones();
+        phase += board.pieces(Piece::Knight).count_ones() as i32;
+        phase += board.pieces(Piece::Bishop).count_ones() as i32;
+        phase += 2 * board.pieces(Piece::Rook).count_ones() as i32;
+        phase += 4 * board.pieces(Piece::Queen).count_ones() as i32;
 
         let clamped = phase.min(TOTAL_PHASE);
-        256 * (24 - clamped as i32) / 24
+        (256 * (TOTAL_PHASE - clamped) + 12) / TOTAL_PHASE
     }
 
     pub fn mate_score(score: i32) -> bool {

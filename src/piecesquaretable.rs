@@ -1,5 +1,7 @@
 use chessframe::{color::Color, piece::Piece, rank::Rank, square::Square};
 
+use crate::eval::s;
+
 pub struct PieceSquareTable;
 
 #[rustfmt::skip]
@@ -18,7 +20,7 @@ impl PieceSquareTable {
     pub const PAWN_END: [i8; 64] = [
           0,  0,  0,  0,  0,  0,  0,  0,
          80, 80, 80, 80, 80, 80, 80, 80,
-         50, 50, 50, 50, 50, 50, 50, 50,
+         60, 60, 60, 60, 60, 60, 60, 60,
          30, 30, 30, 30, 30, 30, 30, 30,
          20, 20, 20, 20, 20, 20, 20, 20,
          10, 10, 10, 10, 10, 10, 10, 10,
@@ -131,6 +133,6 @@ impl PieceSquareTable {
                 .get_unchecked(square.to_index()) as i32
         };
 
-        mg_score + (eg_score << 16)
+        s(mg_score, eg_score)
     }
 }
