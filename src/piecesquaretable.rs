@@ -92,7 +92,7 @@ impl PieceSquareTable {
         -50,-30,-30,-30,-30,-30,-30,-50,
     ];
 
-    pub const TABLES: [[i8; 64]; 6] = [
+    pub const TABLES_MG: [[i8; 64]; 6] = [
         Self::PAWN,
         Self::KNIGHT,
         Self::BISHOP,
@@ -101,7 +101,16 @@ impl PieceSquareTable {
         Self::KING,
     ];
 
-    pub fn read(square: Square, piece: Piece, color: Color, game_phase: i32) -> i8 {
+    pub const TABLES_EG: [[i8; 64]; 6] = [
+        Self::PAWN_END,
+        Self::KNIGHT,
+        Self::BISHOP,
+        Self::ROOK,
+        Self::QUEEN,
+        Self::KING_END,
+    ];
+
+    pub fn read(square: Square, piece: Piece, color: Color) -> i32 {
         let mut square = square;
 
         if color == Color::White {
@@ -111,32 +120,17 @@ impl PieceSquareTable {
             square = Square::make_square(rank, file);
         }
 
-        if piece == Piece::Pawn {
-            let pawn_start = unsafe {
-                *Self::PAWN.get_unchecked(square.to_index())
-            } as i32;
-            let pawn_end = unsafe {
-                *Self::PAWN_END.get_unchecked(square.to_index())
-            } as i32;
-            let interpolated = (pawn_start * (256 - game_phase) + pawn_end * game_phase) / 256;
-
-            return interpolated as i8;
-        } else if piece == Piece::King {
-            let king_start = unsafe {
-                *Self::KING.get_unchecked(square.to_index())
-            } as i32;
-            let king_end = unsafe {
-                *Self::KING_END.get_unchecked(square.to_index())
-            } as i32;
-            let interpolated = (king_start * (256 - game_phase) + king_end * game_phase) / 256;
-
-            return interpolated as i8;
-        }
-
-        unsafe {
-            *Self::TABLES
+        let mg_score = unsafe {
+            *Self::TABLES_MG
                 .get_unchecked(piece.to_index())
-                .get_unchecked(square.to_index())
-        }
+                .get_unchecked(square.to_index()) as i32
+        };
+        let eg_score = unsafe {
+            *Self::TABLES_EG
+                .get_unchecked(piece.to_index())
+                .get_unchecked(square.to_index()) as i32
+        };
+
+        mg_score + (eg_score << 16)
     }
 }

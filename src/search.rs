@@ -158,7 +158,7 @@ impl<'a> Search<'a> {
 
             let mut delta = 16;
 
-            let (mut alpha, mut beta) = if depth >= 6 {
+            let (mut alpha, mut beta) = if depth >= 5 {
                 (evaluation - delta, evaluation + delta)
             } else {
                 (-INFINITY, INFINITY)
@@ -393,7 +393,7 @@ impl<'a> Search<'a> {
             if let Ok(board) = board.make_null_move_new() {
                 let mut node_pv = [ChessMove::NULL_MOVE; 16];
 
-                let reduction = 4 + depth / 6;
+                let reduction = 4 + depth / 4;
 
                 let score = -self.search(&board, -beta, -(beta - 1), depth.saturating_sub(reduction), ply + 1, &mut node_pv);
 
