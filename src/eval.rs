@@ -4,7 +4,8 @@ use chessframe::{
     color::Color,
     file::File,
     magic::{FILES, get_adjacent_files, get_bishop_moves, get_knight_moves, get_rook_moves},
-    piece::{PIECES, Piece}, square::Square,
+    piece::{PIECES, Piece},
+    square::Square,
 };
 
 use crate::piecesquaretable::PieceSquareTable;
@@ -46,15 +47,15 @@ impl Eval<'_> {
 
         for piece in PIECES {
             for square in self.board.pieces_color(piece, Color::White) {
-                score += Self::piece_value(piece)
-                    + PieceSquareTable::read(square, piece, Color::White);
+                score +=
+                    Self::piece_value(piece) + PieceSquareTable::read(square, piece, Color::White);
 
                 mobility_score += self.mobility_score(square, piece, Color::White);
             }
 
             for square in self.board.pieces_color(piece, Color::Black) {
-                score -= Self::piece_value(piece)
-                    + PieceSquareTable::read(square, piece, Color::Black);
+                score -=
+                    Self::piece_value(piece) + PieceSquareTable::read(square, piece, Color::Black);
 
                 mobility_score -= self.mobility_score(square, piece, Color::Black);
             }
@@ -98,11 +99,7 @@ impl Eval<'_> {
             }
         }
 
-        if color == Color::White {
-            score
-        } else {
-            -score
-        }
+        if color == Color::White { score } else { -score }
     }
 
     pub fn piece_combination_score(&self, color: Color) -> i32 {
@@ -116,11 +113,7 @@ impl Eval<'_> {
             score += s(5, -10);
         }
 
-        if color == Color::White {
-            score
-        } else {
-            -score
-        }
+        if color == Color::White { score } else { -score }
     }
 
     pub fn mobility_score(&self, square: Square, piece: Piece, color: Color) -> i32 {

@@ -8,7 +8,8 @@ use chessframe::{
 use crate::{
     eval::Eval,
     move_sorter::MoveSorter,
-    search::{Bound, Search, TimeManagement},
+    search::{Bound, Search},
+    time_management::TimeManagement,
 };
 
 pub struct Engine {

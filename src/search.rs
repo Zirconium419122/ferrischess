@@ -5,7 +5,7 @@ use chessframe::{
     transpositiontable::TranspositionTable,
 };
 
-use crate::{eval::Eval, move_sorter::MoveSorter};
+use crate::{eval::Eval, move_sorter::MoveSorter, time_management::TimeManagement};
 
 // Let's just use 1 billion instead of i32::MAX since I'm scared of overflow and underflow.
 pub const INFINITY: i32 = 1_000_000_000;
@@ -17,50 +17,6 @@ pub enum Bound {
     Exact,
     Upper,
     Lower,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default)]
-pub enum TimeManagement {
-    #[default]
-    None,
-    MoveTime { time: usize },
-    TimeLeft { time: usize },
-}
-
-impl TimeManagement {
-    pub fn new(
-        move_time: Option<usize>,
-        time: Option<usize>,
-        time_inc: Option<usize>,
-    ) -> TimeManagement {
-        if let Some(move_time) = move_time {
-            TimeManagement::MoveTime {
-                time: move_time.max(5),
-            }
-        } else if let Some(time) = time {
-            TimeManagement::TimeLeft {
-                time: (time / 20 + time_inc.unwrap_or(0) / 2).max(5),
-            }
-        } else {
-            TimeManagement::None
-        }
-    }
-
-    pub fn should_cancel_search(&self, search: &mut Search) -> bool {
-        if search.think_timer.elapsed().as_millis() as usize >= self.time()
-            && *self != TimeManagement::None
-        {
-            search.cancelled = true;
-        }
-        search.cancelled
-    }
-
-    pub fn time(&self) -> usize {
-        match self {
-            TimeManagement::MoveTime { time } | TimeManagement::TimeLeft { time } => *time,
-            _ => 0,
-        }
-    }
 }
 
 pub struct Search<'a> {
@@ -82,10 +38,10 @@ pub struct Search<'a> {
     pub nodes: usize,
     pub seldepth: u8,
 
-    think_timer: Instant,
+    pub think_timer: Instant,
     pub time_management: TimeManagement,
 
-    cancelled: bool,
+    pub cancelled: bool,
 }
 
 pub struct SearchInfo {
@@ -363,7 +319,7 @@ impl<'a> Search<'a> {
                         self.move_sorter.update_history(
                             entry.value.2.to,
                             unsafe { board.get_piece(entry.value.2.from).unwrap_unchecked() },
-                            depth as i16 * depth as i16
+                            depth as i16 * depth as i16,
                         );
                     }
 
@@ -423,13 +379,19 @@ impl<'a> Search<'a> {
                 let mut score = i32::MIN;
 
                 // Don't reduce on captures, promotions and checks, because of instabilities.
-                if depth >= 3 && legal_moves >= 3 && is_quiet && !node_board.in_check() && mv.promotion().is_none() {
+                if depth >= 3
+                    && legal_moves >= 3
+                    && is_quiet
+                    && !node_board.in_check()
+                    && mv.promotion().is_none()
+                {
                     // reduction quiet:   1 + log_3(depth) * log_3(legal_moves) * 1 / 2
                     // reduction capture: 0 + log_3(depth) * log_3(legal_moves) * 2 / 5
 
                     let reduction = 1 + depth.ilog(3) * legal_moves.ilog(3) / 2 - is_pv as u32;
+                    let lmr_depth = (depth - 1).saturating_sub(reduction as u8);
 
-                    score = -self.search(&node_board, -alpha - 1, -alpha, depth - 1 - reduction as u8, ply + 1, &mut node_pv);
+                    score = -self.search(&node_board, -alpha - 1, -alpha, lmr_depth, ply + 1, &mut node_pv);
 
                     if score > alpha {
                         score = -self.search(&node_board, -alpha - 1, -alpha, depth - 1, ply + 1, &mut node_pv);
@@ -524,19 +486,21 @@ impl<'a> Search<'a> {
         self.seldepth = self.seldepth.max(ply);
         self.nodes += 1;
 
-        let mut max = Eval::new(board).eval();
-        if max >= beta {
-            return max;
+        let stand_pat = Eval::new(board).eval();
+        if stand_pat >= beta {
+            return stand_pat;
         }
-        if max > alpha {
-            alpha = max;
+        if stand_pat > alpha {
+            alpha = stand_pat;
         }
+
+        let mut max = stand_pat;
 
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
         self.move_sorter.sort_moves(board, &mut moves, None, ply);
         for mv in moves {
-            if let Ok(board) = board.make_move_new(mv) {
-                let score = -self.search_captures(&board, -beta, -alpha, ply + 1);
+            if let Ok(node_board) = board.make_move_new(mv) {
+                let score = -self.search_captures(&node_board, -beta, -alpha, ply + 1);
 
                 if score > max {
                     max = score;

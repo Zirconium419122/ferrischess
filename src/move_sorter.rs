@@ -81,13 +81,7 @@ impl MoveSorter {
     }
 
     #[inline]
-    fn score_move(
-        &self,
-        board: &Board,
-        mv: ChessMove,
-        tt_move: Option<ChessMove>,
-        ply: u8,
-    ) -> i32 {
+    fn score_move(&self, board: &Board, mv: ChessMove, tt_move: Option<ChessMove>, ply: u8) -> i32 {
         if Some(mv) == tt_move {
             return 200_000;
         }
@@ -98,7 +92,7 @@ impl MoveSorter {
 
         let moved = unsafe { board.get_piece(mv.from).unwrap_unchecked() };
         if board.get_piece(mv.to).is_some() {
-            let see = self.see(board, mv);
+            let see = Self::see(board, mv);
 
             if see >= 0 {
                 return 50_000 + see;
@@ -114,7 +108,7 @@ impl MoveSorter {
         self.history[moved.to_index()][mv.to.to_index()] as i32
     }
 
-    fn see(&self, board: &Board, mv: ChessMove) -> i32 {
+    pub fn see(board: &Board, mv: ChessMove) -> i32 {
         let target = mv.to;
 
         let victim = match board.get_piece(target) {
@@ -130,13 +124,13 @@ impl MoveSorter {
         gain[0] = Eval::piece_value(victim);
 
         loop {
-            let attackers = self.attackers_to(board, target, side, occ);
+            let attackers = Self::attackers_to(board, target, side, occ);
             if attackers.is_zero() {
                 break;
             }
 
             let (from_square, attacker_piece) =
-                self.least_valuable_attacker(board, side, attackers);
+                Self::least_valuable_attacker(board, side, attackers);
             depth += 1;
 
             gain[depth] = Eval::piece_value(attacker_piece) - gain[depth - 1];
@@ -156,7 +150,7 @@ impl MoveSorter {
         gain[0]
     }
 
-    fn attackers_to(&self, board: &Board, square: Square, side: Color, occ: BitBoard) -> BitBoard {
+    fn attackers_to(board: &Board, square: Square, side: Color, occ: BitBoard) -> BitBoard {
         let mut attackers = BitBoard::default();
 
         attackers |= board.pieces_color(Piece::Pawn, side) & get_pawn_attacks(square, !side);
@@ -169,12 +163,7 @@ impl MoveSorter {
         attackers & occ
     }
 
-    fn least_valuable_attacker(
-        &self,
-        board: &Board,
-        side: Color,
-        attackers: BitBoard,
-    ) -> (Square, Piece) {
+    fn least_valuable_attacker(board: &Board, side: Color, attackers: BitBoard) -> (Square, Piece) {
         for piece in PIECES {
             let bitboard = board.pieces_color(piece, side) & attackers;
 
@@ -203,11 +192,10 @@ mod tests {
         let fen = "7k/4r3/8/8/8/8/4Q3/4K3 w - - 0 1";
         let board = Board::from_fen(fen);
 
-        let sorter = MoveSorter::new();
         let mv = ChessMove::new(Square::E2, Square::E7);
 
         assert!(
-            sorter.see(&board, mv) > 0,
+            MoveSorter::see(&board, mv) > 0,
             "expected SEE to be positive for a free rook capture"
         );
     }
@@ -217,11 +205,10 @@ mod tests {
         let fen = "7k/8/3p4/4p3/8/5N2/8/4K3 w - - 0 1";
         let board = Board::from_fen(fen);
 
-        let sorter = MoveSorter::new();
         let mv = ChessMove::new(Square::F3, Square::E5);
 
         assert!(
-            sorter.see(&board, mv) < 0,
+            MoveSorter::see(&board, mv) < 0,
             "expected SEE to be negative for a losing knight capture"
         );
     }
@@ -231,11 +218,10 @@ mod tests {
         let fen = "7k/8/2p5/3p4/4P3/8/8/4K3 w - - 0 1";
         let board = Board::from_fen(fen);
 
-        let sorter = MoveSorter::new();
         let mv = ChessMove::new(Square::E4, Square::E5);
 
         assert!(
-            sorter.see(&board, mv) == 0,
+            MoveSorter::see(&board, mv) == 0,
             "expected SEE to be neutral for a equal pawn capture"
         );
     }
