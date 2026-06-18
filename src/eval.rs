@@ -117,6 +117,10 @@ impl Eval<'_> {
     }
 
     pub fn mobility_score(&self, square: Square, piece: Piece, color: Color) -> i32 {
+        if piece == Piece::Pawn || piece == Piece::King {
+            return 0;
+        }
+
         let allied_pieces = self.board.occupancy(color);
         let combined = self.board.combined();
 
@@ -127,7 +131,7 @@ impl Eval<'_> {
             Piece::Bishop => get_bishop_moves(square, combined),
             Piece::Rook => get_rook_moves(square, combined),
             Piece::Queen => get_bishop_moves(square, combined) | get_rook_moves(square, combined),
-            _ => return 0,
+            _ => unreachable!(),
         } & !allied_pieces & !pawn_attacks).count_ones() as i32;
 
         match piece {
