@@ -15,15 +15,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          prefix-key: "rust"
-          shared-key: "latest"
-          key: dependencies-x86_64-unknown-linux-gnu
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -39,7 +31,7 @@ jobs:
           mv target/x86_64-unknown-linux-gnu/release/ferrischess artifacts/ferrischess-x86_64-unknown-linux-gnu
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ferrischess-x86_64-unknown-linux-gnu
           path: artifacts/*
@@ -50,15 +42,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          prefix-key: "rust"
-          shared-key: "latest"
-          key: dependencies-x86_64-pc-windows-msvc
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -74,7 +58,7 @@ jobs:
           move target\x86_64-pc-windows-msvc\release\ferrischess.exe artifacts\ferrischess-x86_64-pc-windows-msvc.exe
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ferrischess-x86_64-pc-windows-msvc
           path: artifacts/*
@@ -85,15 +69,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          prefix-key: "rust"
-          shared-key: "latest"
-          key: dependencies-aarch64-apple-darwin
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -109,7 +85,7 @@ jobs:
           mv target/aarch64-apple-darwin/release/ferrischess artifacts/ferrischess-aarch64-apple-darwin
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ferrischess-aarch64-apple-darwin
           path: artifacts/*
@@ -121,12 +97,12 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: artifacts/**/*
           token: ${{ secrets.GITHUB_TOKEN }}
