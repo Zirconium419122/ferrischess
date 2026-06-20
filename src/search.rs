@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Instant};
+use std::{collections::HashSet, sync::LazyLock, time::Instant};
 
 use chessframe::{
     bitboard::EMPTY, board::Board, chess_move::ChessMove, piece::Piece,
@@ -9,6 +9,20 @@ use crate::{eval::Eval, move_sorter::MoveSorter, time_management::TimeManagement
 
 // Let's just use 1 billion instead of i32::MAX since I'm scared of overflow and underflow.
 pub const INFINITY: i32 = 1_000_000_000;
+
+pub static REDUCTIONS: LazyLock<[[u8; 32]; 32]> = LazyLock::new(|| {
+    let mut reductions = [[0; 32]; 32];
+
+    for depth in 1..32 {
+        for moves in 1..32 {
+            let reduction = 1.0 + (depth as f64).log(3.0) * (moves as f64).log(3.0) / 2.0;
+
+            reductions[depth][moves] = reduction as u8;
+        }
+    }
+
+    reductions
+});
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default)]
 pub enum Bound {
@@ -341,6 +355,7 @@ impl<'a> Search<'a> {
         }
 
         if !is_pv
+            && depth > 1
             && !board.in_check()
             && (board.occupancy(board.side_to_move)
                 ^ board.pieces_color(Piece::Pawn, board.side_to_move))
@@ -388,8 +403,8 @@ impl<'a> Search<'a> {
                     // reduction quiet:   1 + log_3(depth) * log_3(legal_moves) * 1 / 2
                     // reduction capture: 0 + log_3(depth) * log_3(legal_moves) * 2 / 5
 
-                    let reduction = 1 + depth.ilog(3) * legal_moves.ilog(3) / 2 - is_pv as u32;
-                    let lmr_depth = (depth - 1).saturating_sub(reduction as u8);
+                    let reduction = REDUCTIONS[depth.min(31) as usize][legal_moves.min(31) as usize] - is_pv as u8;
+                    let lmr_depth = (depth - 1).saturating_sub(reduction);
 
                     score = -self.search(&node_board, -alpha - 1, -alpha, lmr_depth, ply + 1, &mut node_pv);
 
