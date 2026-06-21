@@ -10,7 +10,7 @@ use chessframe::{
 };
 
 use crate::{
-    eval::Eval,
+    eval::{Eval, PIECE_VALUES_EG},
     move_sorter::MoveSorter,
     time_management::TimeManagement,
 };
@@ -58,7 +58,7 @@ impl SearchInfo {
     pub fn print_info(&self) {
         let score = if Eval::mate_score(self.evaluation as i32) {
             let moves_to_mate = Eval::MATE_SCORE - self.evaluation.abs() as i32;
-            let mate_in_moves = (moves_to_mate / 2) + 1;
+            let mate_in_moves = (moves_to_mate + 1) / 2;
 
             Score {
                 mate: Some(self.evaluation.signum() * mate_in_moves as isize),
@@ -350,11 +350,11 @@ impl<'a> Search<'a> {
 
         let zobrist_hash = board.hash();
 
-        let inserted = if !self.repetition_table.contains(&zobrist_hash) {
-            self.repetition_table.insert(zobrist_hash)
-        } else {
+        if self.repetition_table.contains(&zobrist_hash) {
             return 0;
-        };
+        }
+
+        let inserted = self.repetition_table.insert(zobrist_hash);
 
         let original_alpha = alpha;
         let mut legal_moves: u8 = 0;
@@ -561,10 +561,24 @@ impl<'a> Search<'a> {
 
         let mut max = stand_pat;
 
+        const FUTILITY_MARGIN: i32 = 170;
+        let futility_base = stand_pat + FUTILITY_MARGIN;
+
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
         self.move_sorter.sort_moves(board, &mut moves, None, ply);
         for mv in moves {
             if let Ok(node_board) = board.make_move_new(mv) {
+                let captured = unsafe { board.get_piece(mv.to).unwrap_unchecked() };
+
+                let futility_score = futility_base + PIECE_VALUES_EG[captured.to_index()];
+                if futility_score <= alpha
+                    && !node_board.in_check()
+                    && mv.promotion().is_none()
+                {
+                    max = max.max(futility_score);
+                    continue;
+                }
+
                 let score = -self.search_captures(&node_board, -beta, -alpha, ply + 1);
 
                 if score > max {
