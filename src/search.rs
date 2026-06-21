@@ -1,11 +1,19 @@
 use std::{collections::HashSet, sync::LazyLock, time::Instant};
 
 use chessframe::{
-    bitboard::EMPTY, board::Board, chess_move::ChessMove, piece::Piece,
+    bitboard::EMPTY,
+    board::Board,
+    chess_move::ChessMove,
+    piece::Piece,
     transpositiontable::TranspositionTable,
+    uci::{Info, Score},
 };
 
-use crate::{eval::Eval, move_sorter::MoveSorter, time_management::TimeManagement};
+use crate::{
+    eval::Eval,
+    move_sorter::MoveSorter,
+    time_management::TimeManagement,
+};
 
 // Let's just use 1 billion instead of i32::MAX since I'm scared of overflow and underflow.
 pub const INFINITY: i32 = 1_000_000_000;
@@ -33,6 +41,58 @@ pub enum Bound {
     Lower,
 }
 
+pub struct SearchInfo {
+    pub depth: usize,
+    pub seldepth: usize,
+
+    pub time: usize,
+    pub nodes: usize,
+    pub nps: usize,
+
+    pub evaluation: isize,
+    pub _best_move: ChessMove,
+    pub pv: Vec<ChessMove>,
+}
+
+impl SearchInfo {
+    pub fn print_info(&self) {
+        let score = if Eval::mate_score(self.evaluation as i32) {
+            let moves_to_mate = Eval::MATE_SCORE - self.evaluation.abs() as i32;
+            let mate_in_moves = (moves_to_mate / 2) + 1;
+
+            Score {
+                mate: Some(self.evaluation.signum() * mate_in_moves as isize),
+                ..Default::default()
+            }
+        } else {
+            Score {
+                cp: Some(self.evaluation),
+                ..Default::default()
+            }
+        };
+
+        let pv = self
+            .pv
+            .iter()
+            .map(|mv| mv.to_string())
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        let info = Info {
+            depth: Some(self.depth),
+            seldepth: Some(self.seldepth),
+            pv: Some(pv),
+            score: Some(score),
+            time: Some(self.time),
+            nodes: Some(self.nodes),
+            nps: Some(self.nps),
+            ..Default::default()
+        };
+
+        println!("{}", info);
+    }
+}
+
 pub struct Search<'a> {
     board: &'a Board,
     search_depth: u8,
@@ -56,19 +116,6 @@ pub struct Search<'a> {
     pub time_management: TimeManagement,
 
     pub cancelled: bool,
-}
-
-pub struct SearchInfo {
-    pub depth: Option<usize>,
-    pub seldepth: Option<usize>,
-
-    pub time: Option<usize>,
-    pub nodes: Option<usize>,
-    pub nps: Option<usize>,
-
-    pub evaluation: Option<isize>,
-    pub best_move: Option<ChessMove>,
-    pub pv: Option<Vec<ChessMove>>,
 }
 
 impl<'a> Search<'a> {
@@ -108,7 +155,7 @@ impl<'a> Search<'a> {
         }
     }
 
-    pub fn start_search(&mut self) -> SearchInfo {
+    pub fn start_search(&mut self) {
         let search_depth = if self.time_management != TimeManagement::None {
             Search::MAX_PLY
         } else {
@@ -169,19 +216,22 @@ impl<'a> Search<'a> {
             }
         }
 
-        let nodes = self.nodes;
         let elapsed = self.think_timer.elapsed().as_millis() as usize;
 
-        SearchInfo {
-            depth: Some(depth_searched as usize),
-            seldepth: Some(self.seldepth as usize),
-            time: Some(elapsed),
-            nodes: Some(nodes),
-            nps: Some((nodes as f32 * 1000.0 / elapsed.max(1) as f32).round() as usize),
-            evaluation: Some(self.evaluation as isize),
-            best_move: Some(self.best_move),
-            pv: Some(self.pv.clone()),
-        }
+        let search_info = SearchInfo {
+            depth: depth_searched as usize,
+            seldepth: self.seldepth as usize,
+            time: elapsed,
+            nodes: self.nodes,
+            nps: (self.nodes as f32 * 1000.0 / elapsed.max(1) as f32).round() as usize,
+            evaluation: self.evaluation as isize,
+            _best_move: self.best_move,
+            pv: self.pv.clone(),
+        };
+
+        search_info.print_info();
+
+        println!("bestmove {}", self.best_move);
     }
 
     pub fn should_cancel_search(&mut self) -> bool {
