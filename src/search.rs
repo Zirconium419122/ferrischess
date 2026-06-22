@@ -211,25 +211,25 @@ impl<'a> Search<'a> {
                 break;
             }
 
+            let elapsed = self.think_timer.elapsed().as_millis() as usize;
+
+            let search_info = SearchInfo {
+                depth: depth_searched as usize,
+                seldepth: self.seldepth as usize,
+                time: elapsed,
+                nodes: self.nodes,
+                nps: (self.nodes as f32 * 1000.0 / elapsed.max(1) as f32).round() as usize,
+                evaluation: self.evaluation as isize,
+                _best_move: self.best_move,
+                pv: self.pv.clone(),
+            };
+
+            search_info.print_info();
+
             if self.cancelled {
                 break;
             }
         }
-
-        let elapsed = self.think_timer.elapsed().as_millis() as usize;
-
-        let search_info = SearchInfo {
-            depth: depth_searched as usize,
-            seldepth: self.seldepth as usize,
-            time: elapsed,
-            nodes: self.nodes,
-            nps: (self.nodes as f32 * 1000.0 / elapsed.max(1) as f32).round() as usize,
-            evaluation: self.evaluation as isize,
-            _best_move: self.best_move,
-            pv: self.pv.clone(),
-        };
-
-        search_info.print_info();
 
         println!("bestmove {}", self.best_move);
     }
@@ -350,7 +350,7 @@ impl<'a> Search<'a> {
 
         let zobrist_hash = board.hash();
 
-        if self.repetition_table.contains(&zobrist_hash) {
+        if board.is_fifty_move() || self.repetition_table.contains(&zobrist_hash) {
             return 0;
         }
 
@@ -417,7 +417,7 @@ impl<'a> Search<'a> {
 
                 let reduction = 3 + depth / 6;
 
-                let score = -self.search(&board, -beta, -(beta - 1), depth.saturating_sub(reduction), ply + 1, &mut node_pv);
+                let score = -self.search(&board, -beta, -beta + 1, depth.saturating_sub(reduction), ply + 1, &mut node_pv);
 
                 if score >= beta {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
