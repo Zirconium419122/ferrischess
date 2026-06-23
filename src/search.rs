@@ -55,7 +55,7 @@ pub struct SearchInfo {
 }
 
 impl SearchInfo {
-    pub fn print_info(&self) {
+    pub fn print(&self) {
         let score = if Eval::mate_score(self.evaluation as i32) {
             let moves_to_mate = Eval::MATE_SCORE - self.evaluation.abs() as i32;
             let mate_in_moves = (moves_to_mate + 1) / 2;
@@ -102,11 +102,9 @@ pub struct Search<'a> {
     move_sorter: &'a mut MoveSorter,
 
     evaluation: i32,
-    best_move: ChessMove,
     pv: Vec<ChessMove>,
 
     evaluation_iteration: i32,
-    best_move_iteration: ChessMove,
     pv_iteration: Vec<ChessMove>,
 
     pub nodes: usize,
@@ -138,11 +136,9 @@ impl<'a> Search<'a> {
             move_sorter,
 
             evaluation: 1234567890,
-            best_move: ChessMove::NULL_MOVE,
             pv: Vec::new(),
 
             evaluation_iteration: 1234567890,
-            best_move_iteration: ChessMove::NULL_MOVE,
             pv_iteration: Vec::new(),
 
             nodes: 0,
@@ -156,23 +152,10 @@ impl<'a> Search<'a> {
     }
 
     pub fn start_search(&mut self) {
-        let search_depth = if self.time_management != TimeManagement::None {
-            Search::MAX_PLY
-        } else {
-            self.search_depth
-        };
-
-        self.cancelled = false;
-        self.best_move = ChessMove::NULL_MOVE;
-
         let mut evaluation = 0;
 
-        let mut depth_searched = 0;
-
         self.think_timer = Instant::now();
-        for depth in 1..=search_depth {
-            self.search_depth = depth;
-
+        for depth in 1..=self.search_depth {
             let mut delta = 16;
 
             let (mut alpha, mut beta) = if depth >= 5 {
@@ -182,8 +165,7 @@ impl<'a> Search<'a> {
             };
 
             loop {
-                (self.evaluation_iteration, self.best_move_iteration) =
-                    self.search_base(alpha, beta);
+                self.evaluation_iteration = self.search_base(alpha, beta, depth);
 
                 evaluation = self.evaluation_iteration;
 
@@ -200,12 +182,9 @@ impl<'a> Search<'a> {
                     continue;
                 }
 
-                if self.best_move_iteration != ChessMove::NULL_MOVE {
+                if self.pv_iteration[0] != ChessMove::NULL_MOVE {
                     self.pv = self.pv_iteration.clone();
                     self.evaluation = self.evaluation_iteration;
-                    self.best_move = self.best_move_iteration;
-
-                    depth_searched = self.search_depth;
                 }
 
                 break;
@@ -214,24 +193,24 @@ impl<'a> Search<'a> {
             let elapsed = self.think_timer.elapsed().as_millis() as usize;
 
             let search_info = SearchInfo {
-                depth: depth_searched as usize,
+                depth: depth as usize,
                 seldepth: self.seldepth as usize,
                 time: elapsed,
                 nodes: self.nodes,
                 nps: (self.nodes as f32 * 1000.0 / elapsed.max(1) as f32).round() as usize,
                 evaluation: self.evaluation as isize,
-                _best_move: self.best_move,
+                _best_move: self.pv[0],
                 pv: self.pv.clone(),
             };
 
-            search_info.print_info();
+            search_info.print();
 
             if self.cancelled {
                 break;
             }
         }
 
-        println!("bestmove {}", self.best_move);
+        println!("bestmove {}", self.pv[0]);
     }
 
     pub fn should_cancel_search(&mut self) -> bool {
@@ -239,7 +218,7 @@ impl<'a> Search<'a> {
         time_management.should_cancel_search(self)
     }
 
-    pub fn search_base(&mut self, mut alpha: i32, beta: i32) -> (i32, ChessMove) {
+    pub fn search_base(&mut self, mut alpha: i32, beta: i32, depth: u8) -> i32 {
         let original_alpha = alpha;
         let mut legal_moves: u8 = 0;
         let mut max = i32::MIN;
@@ -258,7 +237,7 @@ impl<'a> Search<'a> {
         let first_move = self
             .transposition_table
             .get(self.board.hash())
-            .map(|entry| entry.value.2);
+            .map_or(ChessMove::NULL_MOVE, |entry| entry.value.2);
 
         let mut moves = self.board.generate_moves_vec(!EMPTY);
         self.move_sorter.sort_moves(self.board, &mut moves, first_move, 1);
@@ -267,14 +246,17 @@ impl<'a> Search<'a> {
                 let mut base_pv = [ChessMove::NULL_MOVE; 16];
 
                 legal_moves += 1;
-                let score = -self.search(&board, -beta, -alpha, self.search_depth - 1, 1, &mut base_pv);
+                let score = -self.search(&board, -beta, -alpha, depth - 1, 1, &mut base_pv);
 
                 if self.should_cancel_search() {
                     if best_move != ChessMove::NULL_MOVE {
                         break;
                     } else {
+                        self.pv_iteration.clear();
+                        self.pv_iteration.push(ChessMove::NULL_MOVE);
+
                         let _ = self.repetition_table.remove(&zobrist_hash);
-                        return (0, ChessMove::NULL_MOVE);
+                        return 0;
                     }
                 }
 
@@ -304,9 +286,9 @@ impl<'a> Search<'a> {
 
         if legal_moves == 0 {
             if self.board.in_check() {
-                return (-Eval::MATE_SCORE, ChessMove::NULL_MOVE);
+                return -Eval::MATE_SCORE;
             } else {
-                return (0, ChessMove::NULL_MOVE);
+                return 0;
             }
         }
 
@@ -314,12 +296,6 @@ impl<'a> Search<'a> {
             self.transposition_table.store(
                 zobrist_hash,
                 (max, Bound::Upper, best_move),
-                self.search_depth,
-            );
-        } else if max >= beta {
-            self.transposition_table.store(
-                zobrist_hash,
-                (max, Bound::Lower, best_move),
                 self.search_depth,
             );
         } else {
@@ -330,7 +306,7 @@ impl<'a> Search<'a> {
             );
         }
 
-        (max, best_move)
+        max
     }
 
     fn search(
@@ -365,6 +341,8 @@ impl<'a> Search<'a> {
 
         let entry = self.transposition_table.get(zobrist_hash).copied();
 
+        let tt_mv = entry.map_or(ChessMove::NULL_MOVE, |entry| entry.value.2);
+
         if let Some(entry) = entry
             && entry.depth >= depth
             && !is_pv
@@ -379,10 +357,10 @@ impl<'a> Search<'a> {
                 Bound::Lower if corrected_score >= beta => {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
 
-                    if !board.combined().is_set(entry.value.2.to) {
+                    if !board.combined().is_set(tt_mv.to) {
                         self.move_sorter.update_history(
-                            entry.value.2.to,
-                            unsafe { board.get_piece(entry.value.2.from).unwrap_unchecked() },
+                            tt_mv.to,
+                            unsafe { board.get_piece(tt_mv.from).unwrap_unchecked() },
                             depth as i16 * depth as i16,
                         );
                     }
@@ -429,7 +407,7 @@ impl<'a> Search<'a> {
         let mut quiets = Vec::with_capacity(8);
 
         let mut moves = board.generate_moves_vec(!EMPTY);
-        self.move_sorter.sort_moves(board, &mut moves, entry.map(|entry| entry.value.2), ply);
+        self.move_sorter.sort_moves(board, &mut moves, tt_mv, ply);
         for mv in moves {
             if let Ok(node_board) = board.make_move_new(mv) {
                 let mut node_pv = [ChessMove::NULL_MOVE; 16];
@@ -500,7 +478,7 @@ impl<'a> Search<'a> {
                             self.move_sorter.update_history(
                                 quiet.to,
                                 unsafe { board.get_piece(quiet.from).unwrap_unchecked() },
-                                -(depth as i16),
+                                -2 * depth as i16,
                             );
                         }
 
@@ -565,7 +543,7 @@ impl<'a> Search<'a> {
         let futility_base = stand_pat + FUTILITY_MARGIN;
 
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
-        self.move_sorter.sort_moves(board, &mut moves, None, ply);
+        self.move_sorter.sort_moves(board, &mut moves, ChessMove::NULL_MOVE, ply);
         for mv in moves {
             if let Ok(node_board) = board.make_move_new(mv) {
                 let captured = unsafe { board.get_piece(mv.to).unwrap_unchecked() };

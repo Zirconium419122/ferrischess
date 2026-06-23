@@ -65,7 +65,7 @@ impl MoveSorter {
         &mut self,
         board: &Board,
         moves: &mut [ChessMove],
-        tt_move: Option<ChessMove>,
+        tt_move: ChessMove,
         ply: u8,
     ) {
         let mut scored: Vec<(i32, ChessMove)> = moves
@@ -81,8 +81,8 @@ impl MoveSorter {
     }
 
     #[inline]
-    fn score_move(&self, board: &Board, mv: ChessMove, tt_move: Option<ChessMove>, ply: u8) -> i32 {
-        if Some(mv) == tt_move {
+    fn score_move(&self, board: &Board, mv: ChessMove, tt_move: ChessMove, ply: u8) -> i32 {
+        if mv == tt_move {
             return 200_000;
         }
 

@@ -16,11 +16,11 @@ impl TimeManagement {
     ) -> TimeManagement {
         if let Some(move_time) = move_time {
             TimeManagement::MoveTime {
-                time: move_time.max(5),
+                time: move_time.max(1),
             }
         } else if let Some(time) = time {
             TimeManagement::TimeLeft {
-                time: (time / 20 + time_inc.unwrap_or(0) / 2).max(5),
+                time: (time / 20 + time_inc.unwrap_or(0) / 2).max(1),
             }
         } else {
             TimeManagement::None
