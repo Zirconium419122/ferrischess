@@ -165,6 +165,10 @@ impl<'a> Search<'a> {
             };
 
             loop {
+                if self.cancelled {
+                    break;
+                }
+
                 self.evaluation_iteration = self.search_base(alpha, beta, depth);
 
                 evaluation = self.evaluation_iteration;
@@ -255,7 +259,7 @@ impl<'a> Search<'a> {
                         self.pv_iteration.clear();
                         self.pv_iteration.push(ChessMove::NULL_MOVE);
 
-                        let _ = self.repetition_table.remove(&zobrist_hash);
+                        if inserted { self.repetition_table.remove(&zobrist_hash); }
                         return 0;
                     }
                 }
@@ -265,10 +269,6 @@ impl<'a> Search<'a> {
                     best_move = mv;
 
                     if score > alpha {
-                        if score >= beta {
-                            break;
-                        }
-
                         alpha = score;
 
                         self.pv_iteration.clear();
@@ -276,6 +276,16 @@ impl<'a> Search<'a> {
                         self.pv_iteration.extend_from_slice(&base_pv);
                         self.pv_iteration.retain(|mv| *mv != ChessMove::NULL_MOVE);
                     }
+                }
+                if score >= beta {
+                    self.transposition_table.store(
+                        zobrist_hash,
+                        (score, Bound::Lower, best_move),
+                        self.search_depth,
+                    );
+                    if inserted { self.repetition_table.remove(&zobrist_hash); }
+
+                    return score;
                 }
             }
         }
@@ -546,15 +556,16 @@ impl<'a> Search<'a> {
         self.move_sorter.sort_moves(board, &mut moves, ChessMove::NULL_MOVE, ply);
         for mv in moves {
             if let Ok(node_board) = board.make_move_new(mv) {
-                let captured = unsafe { board.get_piece(mv.to).unwrap_unchecked() };
+                if let Some(captured) = board.get_piece(mv.to) {
+                    let futility_score = futility_base + PIECE_VALUES_EG[captured.to_index()];
 
-                let futility_score = futility_base + PIECE_VALUES_EG[captured.to_index()];
-                if futility_score <= alpha
-                    && !node_board.in_check()
-                    && mv.promotion().is_none()
-                {
-                    max = max.max(futility_score);
-                    continue;
+                    if futility_score <= alpha
+                        && !node_board.in_check()
+                        && mv.promotion().is_none()
+                    {
+                        max = max.max(futility_score);
+                        continue;
+                    }
                 }
 
                 let score = -self.search_captures(&node_board, -beta, -alpha, ply + 1);
