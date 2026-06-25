@@ -246,11 +246,11 @@ impl<'a> Search<'a> {
         let mut moves = self.board.generate_moves_vec(!EMPTY);
         self.move_sorter.sort_moves(self.board, &mut moves, first_move, 1);
         for mv in moves {
-            if let Ok(board) = self.board.make_move_new(mv) {
+            if let Ok(node_board) = self.board.make_move_new(mv) {
                 let mut base_pv = [ChessMove::NULL_MOVE; 16];
 
                 legal_moves += 1;
-                let score = -self.search(&board, -beta, -alpha, depth - 1, 1, &mut base_pv);
+                let score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, 1, &mut base_pv);
 
                 if self.should_cancel_search() {
                     if best_move != ChessMove::NULL_MOVE {
@@ -281,7 +281,7 @@ impl<'a> Search<'a> {
                     self.transposition_table.store(
                         zobrist_hash,
                         (score, Bound::Lower, best_move),
-                        self.search_depth,
+                        depth,
                     );
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
 
@@ -306,13 +306,13 @@ impl<'a> Search<'a> {
             self.transposition_table.store(
                 zobrist_hash,
                 (max, Bound::Upper, best_move),
-                self.search_depth,
+                depth,
             );
         } else {
             self.transposition_table.store(
                 zobrist_hash,
                 (max, Bound::Exact, best_move),
-                self.search_depth,
+                depth,
             );
         }
 

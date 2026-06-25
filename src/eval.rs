@@ -42,6 +42,10 @@ impl Eval<'_> {
 
         let game_phase = Self::calculate_game_phase(self.board);
 
+        if game_phase > 200 && self.insufficient_material() {
+            return 0;
+        }
+
         let mg_score = |score: i32| score as u16 as i16;
         let eg_score = |score: i32| (((score + 0x8000) as u32) >> 16) as u16 as i16;
 
@@ -114,6 +118,25 @@ impl Eval<'_> {
         }
 
         if color == Color::White { score } else { -score }
+    }
+
+    pub fn insufficient_material(&self) -> bool {
+        if self.board.pieces(Piece::Pawn).count_ones() != 0
+            || self.board.pieces(Piece::Rook).count_ones() != 0
+            || self.board.pieces(Piece::Queen).count_ones() != 0
+        {
+            return false;
+        }
+
+        let knight_count = self.board.pieces(Piece::Knight).count_ones();
+        let bishop_count = self.board.pieces(Piece::Bishop).count_ones();
+        let minors_count = knight_count + bishop_count;
+
+        if minors_count < 2 {
+            return true;
+        }
+
+        false
     }
 
     pub fn mobility_score(&self, square: Square, piece: Piece, color: Color) -> i32 {
