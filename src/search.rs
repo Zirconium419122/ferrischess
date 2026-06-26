@@ -280,7 +280,7 @@ impl<'a> Search<'a> {
                 if score >= beta {
                     self.transposition_table.store(
                         zobrist_hash,
-                        (score, Bound::Lower, best_move),
+                        (Self::correct_store_mate_score(score, 0), Bound::Lower, best_move),
                         depth,
                     );
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
@@ -305,13 +305,13 @@ impl<'a> Search<'a> {
         if max <= original_alpha {
             self.transposition_table.store(
                 zobrist_hash,
-                (max, Bound::Upper, best_move),
+                (Self::correct_store_mate_score(max, 0), Bound::Upper, best_move),
                 depth,
             );
         } else {
             self.transposition_table.store(
                 zobrist_hash,
-                (max, Bound::Exact, best_move),
+                (Self::correct_store_mate_score(max, 0), Bound::Exact, best_move),
                 depth,
             );
         }
@@ -349,6 +349,14 @@ impl<'a> Search<'a> {
 
         let is_pv = alpha != beta - 1;
 
+        alpha = alpha.max(-Eval::MATE_SCORE + ply as i32);
+        beta = beta.min(Eval::MATE_SCORE - ply as i32 - 1);
+
+        if alpha >= beta {
+            if inserted { self.repetition_table.remove(&zobrist_hash); }
+            return alpha;
+        }
+
         let entry = self.transposition_table.get(zobrist_hash).copied();
 
         let tt_mv = entry.map_or(ChessMove::NULL_MOVE, |entry| entry.value.2);
@@ -357,7 +365,7 @@ impl<'a> Search<'a> {
             && entry.depth >= depth
             && !is_pv
         {
-            let corrected_score = Self::correct_mate_score(entry.value.0, ply);
+            let corrected_score = Self::correct_probe_mate_score(entry.value.0, ply);
 
             match entry.value.1 {
                 Bound::Exact => {
@@ -385,13 +393,6 @@ impl<'a> Search<'a> {
             }
         }
 
-        alpha = alpha.max(-Eval::MATE_SCORE + ply as i32);
-        beta = beta.min(Eval::MATE_SCORE - ply as i32);
-
-        if alpha >= beta {
-            return alpha;
-        }
-
         if !is_pv
             && depth > 1
             && !board.in_check()
@@ -405,9 +406,13 @@ impl<'a> Search<'a> {
 
                 let reduction = 3 + depth / 6;
 
-                let score = -self.search(&board, -beta, -beta + 1, depth.saturating_sub(reduction), ply + 1, &mut node_pv);
+                let mut score = -self.search(&board, -beta, -beta + 1, depth.saturating_sub(reduction), ply + 1, &mut node_pv);
 
                 if score >= beta {
+                    if Eval::mate_score(score) {
+                        score = beta;
+                    }
+
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
                     return score;
                 }
@@ -471,7 +476,7 @@ impl<'a> Search<'a> {
                 if score >= beta {
                     self.transposition_table.store(
                         zobrist_hash,
-                        (score, Bound::Lower, mv),
+                        (Self::correct_store_mate_score(score, ply), Bound::Lower, mv),
                         depth,
                     );
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
@@ -520,13 +525,13 @@ impl<'a> Search<'a> {
             if max <= original_alpha {
                 self.transposition_table.store(
                     zobrist_hash,
-                    (max, Bound::Upper, best_move),
+                    (Self::correct_store_mate_score(max, ply), Bound::Upper, best_move),
                     depth,
                 );
             } else {
                 self.transposition_table.store(
                     zobrist_hash,
-                    (max, Bound::Exact, best_move),
+                    (Self::correct_store_mate_score(max, ply), Bound::Exact, best_move),
                     depth,
                 );
             }
@@ -586,10 +591,18 @@ impl<'a> Search<'a> {
         max
     }
 
-    fn correct_mate_score(score: i32, ply: u8) -> i32 {
+    fn correct_store_mate_score(score: i32, ply: u8) -> i32 {
         if Eval::mate_score(score) {
             let sign = score.signum();
-            return (score * sign - ply as i32) * sign;
+            return score + sign * ply as i32;
+        }
+        score
+    }
+
+    fn correct_probe_mate_score(score: i32, ply: u8) -> i32 {
+        if Eval::mate_score(score) {
+            let sign = score.signum();
+            return score - sign * ply as i32;
         }
         score
     }
