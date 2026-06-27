@@ -62,7 +62,7 @@ impl MoveSorter {
     }
 
     pub fn sort_moves(
-        &mut self,
+        &self,
         board: &Board,
         moves: &mut [ChessMove],
         tt_move: ChessMove,

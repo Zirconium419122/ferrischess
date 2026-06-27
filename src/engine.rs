@@ -1,20 +1,18 @@
 use std::{collections::HashSet, io, str::FromStr};
 
 use chessframe::{
-    board::Board, chess_move::ChessMove, color::Color, transpositiontable::TranspositionTable,
+    board::Board, color::Color,
     uci::*,
 };
 
 use crate::{
-    move_sorter::MoveSorter,
-    search::{Bound, Search},
-    time_management::TimeManagement,
+    move_sorter::MoveSorter, search::Search, time_management::TimeManagement, transposition_table::TranspositionTable
 };
 
 pub struct Engine {
     board: Board,
     repetition_table: Vec<u64>,
-    transposition_table: TranspositionTable<(i32, Bound, ChessMove)>,
+    transposition_table: TranspositionTable,
     move_sorter: MoveSorter,
     quitting: bool,
 }
@@ -109,7 +107,7 @@ impl Uci for Engine {
                 }) => {
                     let mut repetition_table = HashSet::from_iter(self.repetition_table.clone());
                     repetition_table.reserve(16);
-                    let transposition_table = &mut self.transposition_table;
+                    let transposition_table = &self.transposition_table;
 
                     let (time, time_inc) = if self.board.side_to_move == Color::White {
                         (wtime, winc)

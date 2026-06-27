@@ -6,6 +6,7 @@ mod move_sorter;
 mod piecesquaretable;
 mod search;
 mod time_management;
+mod transposition_table;
 
 fn main() {
     let mut engine = Engine::new();

@@ -5,14 +5,13 @@ use chessframe::{
     board::Board,
     chess_move::ChessMove,
     piece::Piece,
-    transpositiontable::TranspositionTable,
     uci::{Info, Score},
 };
 
 use crate::{
     eval::{Eval, PIECE_VALUES_EG},
     move_sorter::MoveSorter,
-    time_management::TimeManagement,
+    time_management::TimeManagement, transposition_table::TranspositionTable,
 };
 
 // Let's just use 1 billion instead of i32::MAX since I'm scared of overflow and underflow.
@@ -98,7 +97,7 @@ pub struct Search<'a> {
     search_depth: u8,
 
     repetition_table: HashSet<u64>,
-    transposition_table: &'a mut TranspositionTable<(i32, Bound, ChessMove)>,
+    transposition_table: &'a TranspositionTable,
     move_sorter: &'a mut MoveSorter,
 
     evaluation: i32,
@@ -124,7 +123,7 @@ impl<'a> Search<'a> {
         depth: Option<u8>,
         time_management: TimeManagement,
         repetition_table: HashSet<u64>,
-        transposition_table: &'a mut TranspositionTable<(i32, Bound, ChessMove)>,
+        transposition_table: &'a TranspositionTable,
         move_sorter: &'a mut MoveSorter,
     ) -> Search<'a> {
         Search {
@@ -240,8 +239,8 @@ impl<'a> Search<'a> {
 
         let first_move = self
             .transposition_table
-            .get(self.board.hash())
-            .map_or(ChessMove::NULL_MOVE, |entry| entry.value.2);
+            .probe(self.board.hash())
+            .map_or(ChessMove::NULL_MOVE, |entry| entry.mv);
 
         let mut moves = self.board.generate_moves_vec(!EMPTY);
         self.move_sorter.sort_moves(self.board, &mut moves, first_move, 1);
@@ -280,8 +279,10 @@ impl<'a> Search<'a> {
                 if score >= beta {
                     self.transposition_table.store(
                         zobrist_hash,
-                        (Self::correct_store_mate_score(score, 0), Bound::Lower, best_move),
                         depth,
+                        Self::correct_store_mate_score(score, 0),
+                        best_move,
+                        Bound::Lower,
                     );
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
 
@@ -305,14 +306,18 @@ impl<'a> Search<'a> {
         if max <= original_alpha {
             self.transposition_table.store(
                 zobrist_hash,
-                (Self::correct_store_mate_score(max, 0), Bound::Upper, best_move),
                 depth,
+                Self::correct_store_mate_score(max, 0),
+                best_move,
+                Bound::Upper,
             );
         } else {
             self.transposition_table.store(
                 zobrist_hash,
-                (Self::correct_store_mate_score(max, 0), Bound::Exact, best_move),
                 depth,
+                Self::correct_store_mate_score(max, 0),
+                best_move,
+                Bound::Exact,
             );
         }
 
@@ -357,17 +362,17 @@ impl<'a> Search<'a> {
             return alpha;
         }
 
-        let entry = self.transposition_table.get(zobrist_hash).copied();
+        let entry = self.transposition_table.probe(zobrist_hash);
 
-        let tt_mv = entry.map_or(ChessMove::NULL_MOVE, |entry| entry.value.2);
+        let tt_mv = entry.map_or(ChessMove::NULL_MOVE, |entry| entry.mv);
 
         if let Some(entry) = entry
             && entry.depth >= depth
             && !is_pv
         {
-            let corrected_score = Self::correct_probe_mate_score(entry.value.0, ply);
+            let corrected_score = Self::correct_probe_mate_score(entry.score, ply);
 
-            match entry.value.1 {
+            match entry.bound {
                 Bound::Exact => {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
                     return corrected_score;
@@ -476,8 +481,10 @@ impl<'a> Search<'a> {
                 if score >= beta {
                     self.transposition_table.store(
                         zobrist_hash,
-                        (Self::correct_store_mate_score(score, ply), Bound::Lower, mv),
                         depth,
+                        Self::correct_store_mate_score(score, ply),
+                        mv,
+                        Bound::Lower,
                     );
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
 
@@ -525,14 +532,18 @@ impl<'a> Search<'a> {
             if max <= original_alpha {
                 self.transposition_table.store(
                     zobrist_hash,
-                    (Self::correct_store_mate_score(max, ply), Bound::Upper, best_move),
                     depth,
+                    Self::correct_store_mate_score(max, ply),
+                    best_move,
+                    Bound::Upper,
                 );
             } else {
                 self.transposition_table.store(
                     zobrist_hash,
-                    (Self::correct_store_mate_score(max, ply), Bound::Exact, best_move),
                     depth,
+                    Self::correct_store_mate_score(max, ply),
+                    best_move,
+                    Bound::Exact,
                 );
             }
         }
