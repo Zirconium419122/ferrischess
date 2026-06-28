@@ -1,3 +1,5 @@
+use std::sync::atomic::Ordering;
+
 use crate::search::Search;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default)]
@@ -31,9 +33,9 @@ impl TimeManagement {
         if search.think_timer.elapsed().as_millis() as usize >= self.time()
             && *self != TimeManagement::None
         {
-            search.cancelled = true;
+            search.cancelled.store(true, Ordering::Relaxed);
         }
-        search.cancelled
+        search.cancelled.load(Ordering::Relaxed)
     }
 
     pub fn time(&self) -> usize {

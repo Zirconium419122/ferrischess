@@ -1,4 +1,11 @@
-use std::{collections::HashSet, sync::LazyLock, time::Instant};
+use std::{
+    collections::HashSet,
+    sync::{
+        Arc, LazyLock, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Instant,
+};
 
 use chessframe::{
     bitboard::EMPTY,
@@ -11,7 +18,8 @@ use chessframe::{
 use crate::{
     eval::{Eval, PIECE_VALUES_EG},
     move_sorter::MoveSorter,
-    time_management::TimeManagement, transposition_table::TranspositionTable,
+    time_management::TimeManagement,
+    transposition_table::TranspositionTable,
 };
 
 // Let's just use 1 billion instead of i32::MAX since I'm scared of overflow and underflow.
@@ -92,13 +100,13 @@ impl SearchInfo {
     }
 }
 
-pub struct Search<'a> {
-    board: &'a Board,
+pub struct Search {
+    board: Board,
     search_depth: u8,
 
     repetition_table: HashSet<u64>,
-    transposition_table: &'a TranspositionTable,
-    move_sorter: &'a mut MoveSorter,
+    transposition_table: Arc<TranspositionTable>,
+    move_sorter: Arc<Mutex<MoveSorter>>,
 
     evaluation: i32,
     pv: Vec<ChessMove>,
@@ -112,20 +120,21 @@ pub struct Search<'a> {
     pub think_timer: Instant,
     pub time_management: TimeManagement,
 
-    pub cancelled: bool,
+    pub cancelled: Arc<AtomicBool>,
 }
 
-impl<'a> Search<'a> {
+impl Search {
     pub const MAX_PLY: u8 = 255;
 
     pub fn new(
-        board: &'a Board,
+        board: Board,
         depth: Option<u8>,
         time_management: TimeManagement,
         repetition_table: HashSet<u64>,
-        transposition_table: &'a TranspositionTable,
-        move_sorter: &'a mut MoveSorter,
-    ) -> Search<'a> {
+        transposition_table: Arc<TranspositionTable>,
+        move_sorter: Arc<Mutex<MoveSorter>>,
+        cancelled: Arc<AtomicBool>,
+    ) -> Search {
         Search {
             board,
             search_depth: depth.unwrap_or(Search::MAX_PLY),
@@ -146,7 +155,7 @@ impl<'a> Search<'a> {
             think_timer: Instant::now(),
             time_management,
 
-            cancelled: false,
+            cancelled,
         }
     }
 
@@ -164,7 +173,7 @@ impl<'a> Search<'a> {
             };
 
             loop {
-                if self.cancelled {
+                if self.cancelled.load(Ordering::Relaxed) {
                     break;
                 }
 
@@ -208,7 +217,7 @@ impl<'a> Search<'a> {
 
             search_info.print();
 
-            if self.cancelled {
+            if self.cancelled.load(Ordering::Relaxed) {
                 break;
             }
         }
@@ -235,7 +244,7 @@ impl<'a> Search<'a> {
             false
         };
 
-        self.move_sorter.age_history();
+        self.move_sorter.lock().unwrap().age_history();
 
         let first_move = self
             .transposition_table
@@ -243,7 +252,7 @@ impl<'a> Search<'a> {
             .map_or(ChessMove::NULL_MOVE, |entry| entry.mv);
 
         let mut moves = self.board.generate_moves_vec(!EMPTY);
-        self.move_sorter.sort_moves(self.board, &mut moves, first_move, 1);
+        self.move_sorter.lock().unwrap().sort_moves(&self.board, &mut moves, first_move, 1);
         for mv in moves {
             if let Ok(node_board) = self.board.make_move_new(mv) {
                 let mut base_pv = [ChessMove::NULL_MOVE; 16];
@@ -381,7 +390,7 @@ impl<'a> Search<'a> {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
 
                     if !board.combined().is_set(tt_mv.to) {
-                        self.move_sorter.update_history(
+                        self.move_sorter.lock().unwrap().update_history(
                             tt_mv.to,
                             unsafe { board.get_piece(tt_mv.from).unwrap_unchecked() },
                             depth as i16 * depth as i16,
@@ -427,7 +436,7 @@ impl<'a> Search<'a> {
         let mut quiets = Vec::with_capacity(8);
 
         let mut moves = board.generate_moves_vec(!EMPTY);
-        self.move_sorter.sort_moves(board, &mut moves, tt_mv, ply);
+        self.move_sorter.lock().unwrap().sort_moves(board, &mut moves, tt_mv, ply);
         for mv in moves {
             if let Ok(node_board) = board.make_move_new(mv) {
                 let mut node_pv = [ChessMove::NULL_MOVE; 16];
@@ -452,7 +461,7 @@ impl<'a> Search<'a> {
                     // reduction capture: 0 + log_3(depth) * log_3(legal_moves) * 2 / 5
 
                     let reduction = REDUCTIONS[depth.min(31) as usize][legal_moves.min(31) as usize] - is_pv as u8;
-                    let lmr_depth = (depth - 1).saturating_sub(reduction);
+                    let lmr_depth = (depth - 1).saturating_sub(reduction).max(1);
 
                     score = -self.search(&node_board, -alpha - 1, -alpha, lmr_depth, ply + 1, &mut node_pv);
 
@@ -489,7 +498,7 @@ impl<'a> Search<'a> {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
 
                     if is_quiet {
-                        self.move_sorter.update_history(
+                        self.move_sorter.lock().unwrap().update_history(
                             mv.to,
                             unsafe { board.get_piece(mv.from).unwrap_unchecked() },
                             depth as i16 * depth as i16,
@@ -497,14 +506,14 @@ impl<'a> Search<'a> {
 
                         quiets.pop();
                         for quiet in quiets {
-                            self.move_sorter.update_history(
+                            self.move_sorter.lock().unwrap().update_history(
                                 quiet.to,
                                 unsafe { board.get_piece(quiet.from).unwrap_unchecked() },
                                 -2 * depth as i16,
                             );
                         }
 
-                        self.move_sorter.add_killer_move(mv, ply);
+                        self.move_sorter.lock().unwrap().add_killer_move(mv, ply);
                     }
 
                     return score;
@@ -569,7 +578,7 @@ impl<'a> Search<'a> {
         let futility_base = stand_pat + FUTILITY_MARGIN;
 
         let mut moves = board.generate_moves_vec(board.occupancy(!board.side_to_move));
-        self.move_sorter.sort_moves(board, &mut moves, ChessMove::NULL_MOVE, ply);
+        self.move_sorter.lock().unwrap().sort_moves(board, &mut moves, ChessMove::NULL_MOVE, ply);
         for mv in moves {
             if let Ok(node_board) = board.make_move_new(mv) {
                 if let Some(captured) = board.get_piece(mv.to) {

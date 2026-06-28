@@ -61,13 +61,7 @@ impl MoveSorter {
         }
     }
 
-    pub fn sort_moves(
-        &self,
-        board: &Board,
-        moves: &mut [ChessMove],
-        tt_move: ChessMove,
-        ply: u8,
-    ) {
+    pub fn sort_moves(&self, board: &Board, moves: &mut [ChessMove], tt_move: ChessMove, ply: u8) {
         let mut scored: Vec<(i32, ChessMove)> = moves
             .iter()
             .map(|&mv| (self.score_move(board, mv, tt_move, ply), mv))

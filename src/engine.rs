@@ -1,19 +1,27 @@
-use std::{collections::HashSet, io, str::FromStr};
-
-use chessframe::{
-    board::Board, color::Color,
-    uci::*,
+use std::{
+    collections::HashSet,
+    io,
+    str::FromStr,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread,
 };
 
+use chessframe::{board::Board, color::Color, uci::*};
+
 use crate::{
-    move_sorter::MoveSorter, search::Search, time_management::TimeManagement, transposition_table::TranspositionTable
+    move_sorter::MoveSorter, search::Search, time_management::TimeManagement,
+    transposition_table::TranspositionTable,
 };
 
 pub struct Engine {
     board: Board,
     repetition_table: Vec<u64>,
-    transposition_table: TranspositionTable,
-    move_sorter: MoveSorter,
+    transposition_table: Arc<TranspositionTable>,
+    move_sorter: Arc<Mutex<MoveSorter>>,
+    cancelled: Arc<AtomicBool>,
     quitting: bool,
 }
 
@@ -73,7 +81,7 @@ impl Uci for Engine {
                 UciCommand::UciNewGame => {
                     self.board = Board::default();
                     self.repetition_table.clear();
-                    self.move_sorter.clear();
+                    self.move_sorter.lock().unwrap().clear();
                 }
                 UciCommand::Position { fen, moves } => {
                     if fen == "startpos" {
@@ -105,9 +113,12 @@ impl Uci for Engine {
                     move_time,
                     ..
                 }) => {
+                    self.cancelled.store(false, Ordering::Relaxed);
+
                     let mut repetition_table = HashSet::from_iter(self.repetition_table.clone());
                     repetition_table.reserve(16);
-                    let transposition_table = &self.transposition_table;
+                    let transposition_table = self.transposition_table.clone();
+                    let move_sorter = self.move_sorter.clone();
 
                     let (time, time_inc) = if self.board.side_to_move == Color::White {
                         (wtime, winc)
@@ -115,18 +126,24 @@ impl Uci for Engine {
                         (btime, binc)
                     };
 
-                    let mut search = Search::new(
-                        &self.board,
-                        depth.map(|depth| depth as u8),
-                        TimeManagement::new(move_time, time, time_inc),
-                        repetition_table,
-                        transposition_table,
-                        &mut self.move_sorter,
-                    );
+                    let board = self.board;
+                    let cancelled = self.cancelled.clone();
 
-                    search.start_search();
+                    thread::spawn(move || {
+                        let mut search = Search::new(
+                            board,
+                            depth.map(|depth| depth as u8),
+                            TimeManagement::new(move_time, time, time_inc),
+                            repetition_table,
+                            transposition_table,
+                            move_sorter,
+                            cancelled,
+                        );
+
+                        search.start_search();
+                    });
                 }
-                UciCommand::Stop => {}
+                UciCommand::Stop => self.cancelled.store(true, Ordering::Relaxed),
                 UciCommand::Quit => self.quitting = true,
                 _ => {}
             }
@@ -141,8 +158,11 @@ impl Engine {
         Engine {
             board: Board::default(),
             repetition_table: Vec::new(),
-            transposition_table: TranspositionTable::with_size_mb(Engine::TRANSPOSITIONTABLE_SIZE),
-            move_sorter: MoveSorter::new(),
+            transposition_table: Arc::new(TranspositionTable::with_size_mb(
+                Engine::TRANSPOSITIONTABLE_SIZE,
+            )),
+            move_sorter: Arc::new(Mutex::new(MoveSorter::new())),
+            cancelled: Arc::new(AtomicBool::new(false)),
             quitting: false,
         }
     }
