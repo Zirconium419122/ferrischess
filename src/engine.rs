@@ -18,9 +18,11 @@ use crate::{
 
 pub struct Engine {
     board: Board,
+
     repetition_table: Vec<u64>,
     transposition_table: Arc<TranspositionTable>,
     move_sorter: Arc<Mutex<MoveSorter>>,
+
     cancelled: Arc<AtomicBool>,
     quitting: bool,
 }
@@ -157,11 +159,13 @@ impl Engine {
     pub fn new() -> Engine {
         Engine {
             board: Board::default(),
+
             repetition_table: Vec::new(),
             transposition_table: Arc::new(TranspositionTable::with_size_mb(
                 Engine::TRANSPOSITIONTABLE_SIZE,
             )),
             move_sorter: Arc::new(Mutex::new(MoveSorter::new())),
+
             cancelled: Arc::new(AtomicBool::new(false)),
             quitting: false,
         }

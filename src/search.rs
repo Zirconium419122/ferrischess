@@ -2,7 +2,7 @@ use std::{
     collections::HashSet,
     sync::{
         Arc, LazyLock, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::AtomicBool,
     },
     time::Instant,
 };
@@ -173,7 +173,7 @@ impl Search {
             };
 
             loop {
-                if self.cancelled.load(Ordering::Relaxed) {
+                if self.should_cancel_search() {
                     break;
                 }
 
@@ -217,7 +217,7 @@ impl Search {
 
             search_info.print();
 
-            if self.cancelled.load(Ordering::Relaxed) {
+            if self.should_cancel_search() {
                 break;
             }
         }
@@ -226,8 +226,8 @@ impl Search {
     }
 
     pub fn should_cancel_search(&mut self) -> bool {
-        let time_management = self.time_management;
-        time_management.should_cancel_search(self)
+        self.time_management
+            .should_cancel_search(self.think_timer, self.cancelled.clone())
     }
 
     pub fn search_base(&mut self, mut alpha: i32, beta: i32, depth: u8) -> i32 {
@@ -519,7 +519,7 @@ impl Search {
                     return score;
                 }
 
-                if self.should_cancel_search() {
+                if self.nodes & 1023 == 0 && self.should_cancel_search() {
                     if inserted { self.repetition_table.remove(&zobrist_hash); }
 
                     return max;

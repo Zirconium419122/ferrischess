@@ -1,6 +1,4 @@
-use std::sync::atomic::Ordering;
-
-use crate::search::Search;
+use std::{sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default)]
 pub enum TimeManagement {
@@ -29,13 +27,13 @@ impl TimeManagement {
         }
     }
 
-    pub fn should_cancel_search(&self, search: &mut Search) -> bool {
-        if search.think_timer.elapsed().as_millis() as usize >= self.time()
+    pub fn should_cancel_search(&self, timer: Instant, cancelled: Arc<AtomicBool>) -> bool {
+        if timer.elapsed().as_millis() as usize >= self.time()
             && *self != TimeManagement::None
         {
-            search.cancelled.store(true, Ordering::Relaxed);
+            cancelled.store(true, Ordering::Relaxed);
         }
-        search.cancelled.load(Ordering::Relaxed)
+        cancelled.load(Ordering::Relaxed)
     }
 
     pub fn time(&self) -> usize {
