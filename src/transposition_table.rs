@@ -1,6 +1,15 @@
 use chessframe::chess_move::ChessMove;
 
-use crate::search::Bound;
+use crate::eval::Eval;
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default)]
+pub enum Bound {
+    #[default]
+    None,
+    Exact,
+    Upper,
+    Lower,
+}
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct Entry {
@@ -49,30 +58,31 @@ impl TranspositionTable {
         (zobrist as usize) & (self.max_entries - 1)
     }
 
-    pub fn store(&self, zobrist: u64, depth: u8, score: i32, mv: ChessMove, bound: Bound) {
+    pub fn store(&self, zobrist: u64, depth: u8, ply: u8, mut score: i32, mv: ChessMove, bound: Bound) {
         let index = self.index(zobrist);
 
         let entry = unsafe { self.entries.as_ptr().add(index) as *mut Entry };
 
+        if Eval::mate_score(score) {
+            let sign = score.signum();
+            score += sign * ply as i32;
+        }
+
         unsafe {
+            let replacement_entry = Entry {
+                zobrist,
+                depth,
+                score,
+                mv,
+                bound,
+            };
+
             if (*entry).zobrist == zobrist {
                 if (*entry).depth <= depth {
-                    *entry = Entry {
-                        zobrist,
-                        depth,
-                        score,
-                        mv,
-                        bound,
-                    };
+                    *entry = replacement_entry;
                 }
             } else {
-                *entry = Entry {
-                    zobrist,
-                    depth,
-                    score,
-                    mv,
-                    bound,
-                };
+                *entry = replacement_entry;
             }
         }
     }

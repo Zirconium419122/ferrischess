@@ -19,7 +19,7 @@ use crate::{
     eval::{Eval, PIECE_VALUES_EG},
     move_sorter::MoveSorter,
     time_management::TimeManagement,
-    transposition_table::TranspositionTable,
+    transposition_table::{Bound, TranspositionTable},
 };
 
 // Let's just use 1 billion instead of i32::MAX since I'm scared of overflow and underflow.
@@ -38,15 +38,6 @@ pub static REDUCTIONS: LazyLock<[[u8; 32]; 32]> = LazyLock::new(|| {
 
     reductions
 });
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash, Default)]
-pub enum Bound {
-    #[default]
-    None,
-    Exact,
-    Upper,
-    Lower,
-}
 
 pub struct SearchInfo {
     pub depth: usize,
@@ -177,7 +168,7 @@ impl Search {
                     break;
                 }
 
-                self.evaluation_iteration = self.search_base(alpha, beta, depth);
+                self.evaluation_iteration = self.search_base(alpha, beta, depth, 0);
 
                 evaluation = self.evaluation_iteration;
 
@@ -230,7 +221,7 @@ impl Search {
             .should_cancel_search(self.think_timer, self.cancelled.clone())
     }
 
-    pub fn search_base(&mut self, mut alpha: i32, beta: i32, depth: u8) -> i32 {
+    pub fn search_base(&mut self, mut alpha: i32, beta: i32, depth: u8, ply: u8) -> i32 {
         let original_alpha = alpha;
         let mut legal_moves: u8 = 0;
         let mut max = i32::MIN;
@@ -258,7 +249,7 @@ impl Search {
                 let mut base_pv = [ChessMove::NULL_MOVE; 16];
 
                 legal_moves += 1;
-                let score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, 1, &mut base_pv);
+                let score = -self.search(&node_board, -beta, -alpha, depth - 1 + node_board.in_check() as u8, ply + 1, &mut base_pv);
 
                 if self.should_cancel_search() {
                     if best_move != ChessMove::NULL_MOVE {
@@ -289,7 +280,8 @@ impl Search {
                     self.transposition_table.store(
                         zobrist_hash,
                         depth,
-                        Self::correct_store_mate_score(score, 0),
+                        ply,
+                        score,
                         best_move,
                         Bound::Lower,
                     );
@@ -306,7 +298,7 @@ impl Search {
 
         if legal_moves == 0 {
             if self.board.in_check() {
-                return -Eval::MATE_SCORE;
+                return -Eval::MATE_SCORE + ply as i32;
             } else {
                 return 0;
             }
@@ -316,7 +308,8 @@ impl Search {
             self.transposition_table.store(
                 zobrist_hash,
                 depth,
-                Self::correct_store_mate_score(max, 0),
+                ply,
+                max,
                 best_move,
                 Bound::Upper,
             );
@@ -324,7 +317,8 @@ impl Search {
             self.transposition_table.store(
                 zobrist_hash,
                 depth,
-                Self::correct_store_mate_score(max, 0),
+                ply,
+                max,
                 best_move,
                 Bound::Exact,
             );
@@ -379,7 +373,7 @@ impl Search {
             && entry.depth >= depth
             && !is_pv
         {
-            let corrected_score = Self::correct_probe_mate_score(entry.score, ply);
+            let corrected_score = Self::correct_mate_score(entry.score, ply);
 
             match entry.bound {
                 Bound::Exact => {
@@ -491,7 +485,8 @@ impl Search {
                     self.transposition_table.store(
                         zobrist_hash,
                         depth,
-                        Self::correct_store_mate_score(score, ply),
+                        ply,
+                        score,
                         mv,
                         Bound::Lower,
                     );
@@ -542,7 +537,8 @@ impl Search {
                 self.transposition_table.store(
                     zobrist_hash,
                     depth,
-                    Self::correct_store_mate_score(max, ply),
+                    ply,
+                    max,
                     best_move,
                     Bound::Upper,
                 );
@@ -550,7 +546,8 @@ impl Search {
                 self.transposition_table.store(
                     zobrist_hash,
                     depth,
-                    Self::correct_store_mate_score(max, ply),
+                    ply,
+                    max,
                     best_move,
                     Bound::Exact,
                 );
@@ -611,15 +608,7 @@ impl Search {
         max
     }
 
-    fn correct_store_mate_score(score: i32, ply: u8) -> i32 {
-        if Eval::mate_score(score) {
-            let sign = score.signum();
-            return score + sign * ply as i32;
-        }
-        score
-    }
-
-    fn correct_probe_mate_score(score: i32, ply: u8) -> i32 {
+    fn correct_mate_score(score: i32, ply: u8) -> i32 {
         if Eval::mate_score(score) {
             let sign = score.signum();
             return score - sign * ply as i32;
