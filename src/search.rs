@@ -409,12 +409,12 @@ impl Search {
             .count_ones()
                 != 1
         {
-            if let Ok(board) = board.make_null_move_new() {
+            if let Ok(node_board) = board.make_null_move_new() {
                 let mut node_pv = [ChessMove::NULL_MOVE; 16];
 
                 let reduction = 3 + depth / 6;
 
-                let mut score = -self.search(&board, -beta, -beta + 1, depth.saturating_sub(reduction), ply + 1, &mut node_pv);
+                let mut score = -self.search(&node_board, -beta, -beta + 1, depth.saturating_sub(reduction), ply + 1, &mut node_pv);
 
                 if score >= beta {
                     if Eval::mate_score(score) {
@@ -586,6 +586,14 @@ impl Search {
                         && mv.promotion().is_none()
                     {
                         max = max.max(futility_score);
+                        continue;
+                    }
+
+                    if futility_base <= alpha
+                        && !node_board.in_check()
+                        && MoveSorter::see(board, mv) < 0
+                    {
+                        max = max.max(futility_base);
                         continue;
                     }
                 }
